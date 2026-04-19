@@ -45,12 +45,12 @@ using namespace glm;
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // declaração evitar dependência circular de .hpp
 
-void raytraceCUDA(vector<unsigned char>& pixels,
+void raytraceCUDA(unsigned char* pixels,
                   int WIDTH, 
                   int HEIGHT,
                   vec3 pos, vec3 fwd, vec3 right, vec3 up,
-                  float fov_y
-                  );
+                  float fov_y,
+                  double rs);
  
 
 
@@ -377,11 +377,13 @@ void engineRun(const EngineConfig& config){
             
             vec3 pos, fwd, right, up;
             camera.getVectors(pos, fwd, right, up);
+                
 
-            raytraceCUDA(pixels, 
+            std::vector<unsigned char> pixels(config.WIDTH * config.HEIGHT * 3);
+            raytraceCUDA(pixels.data(), 
                          config.WIDTH, config.HEIGHT, 
                          pos, fwd, right, up,
-                         config.fov_y);
+                         config.fov_y, 0.0);
 
             glBindTexture(GL_TEXTURE_2D, textures);
             glTexSubImage2D(GL_TEXTURE_2D, 0,

@@ -4,6 +4,7 @@ project(BlackHoleSim LANGUAGES CXX CUDA)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CUDA_STANDARD 17)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(GLEW     REQUIRED)
 find_package(glfw3    REQUIRED)
@@ -13,12 +14,6 @@ find_package(CUDAToolkit REQUIRED)
 
 set(DEPS glfw GLEW::GLEW glm::glm OpenGL::GL)
 
-# ── utilitários CPU-only (mantidos do kavan) ──────────────────────────────────
-add_executable(BlackHole2D 2D_lensing.cpp)
-target_link_libraries(BlackHole2D PRIVATE ${DEPS})
-
-add_executable(BlackHole3D black_hole.cpp)
-target_link_libraries(BlackHole3D PRIVATE ${DEPS})
 
 # ── executável principal CUDA + OpenGL ────────────────────────────────────────
 #
@@ -33,7 +28,7 @@ target_link_libraries(BlackHole3D PRIVATE ${DEPS})
 add_executable(BlackHoleCUDA
     main.cpp
     src/engine.cpp
-    src/geodesic_host.cpp   # host code — GCC
+    src/host.cpp   # host code — GCC
     cuda/geodesic.cu         # device code — NVCC
 )
 
@@ -44,14 +39,23 @@ target_link_libraries(BlackHoleCUDA PRIVATE
 
 set_target_properties(BlackHoleCUDA PROPERTIES
     CUDA_SEPARABLE_COMPILATION ON
-    CUDA_ARCHITECTURES         native   # auto-detecta sua GPU
+    CUDA_ARCHITECTURES         75
     LINKER_LANGUAGE            CUDA     # deixa o NVCC fazer o link final
 )
 
-# copia shaders para junto do executável após o build
+get_target_property(CUDA_INCLUDE_DIRS CUDA::cudart INTERFACE_INCLUDE_DIRECTORIES)
+target_include_directories(BlackHoleCUDA SYSTEM PRIVATE
+    $<$<COMPILE_LANGUAGE:CXX>:${CUDA_INCLUDE_DIRS}>
+)
+
 file(GLOB SHADERS "shaders/*.vert" "shaders/*.frag")
 foreach(shader ${SHADERS})
+    get_filename_component(shader_name ${shader} NAME)
     add_custom_command(TARGET BlackHoleCUDA POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+            $<TARGET_FILE_DIR:BlackHoleCUDA>/shaders/
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            ${shader} $<TARGET_FILE_DIR:BlackHoleCUDA>/shaders/)
+            ${shader}
+            $<TARGET_FILE_DIR:BlackHoleCUDA>/shaders/${shader_name}
+    )
 endforeach()

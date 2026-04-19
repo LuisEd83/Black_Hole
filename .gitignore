@@ -2,3 +2,5 @@ todo
 data/
 blackhole/
 python/
+build/
+.cache/
