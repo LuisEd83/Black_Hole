@@ -7,6 +7,7 @@
 #include <glm/gtc/matrix_transform.hpp>
  
 #include <iostream>
+#include <texture_types.h>
 #include <vector>
 #include <string>
 #include <fstream>
@@ -49,8 +50,8 @@ void raytraceCUDA(unsigned char* pixels,
                   int WIDTH, 
                   int HEIGHT,
                   vec3 pos, vec3 fwd, vec3 right, vec3 up,
-                  float fov_y,
-                  double rs);
+                  float fov_y
+                  );
  
 
 
@@ -383,7 +384,7 @@ void engineRun(const EngineConfig& config){
             raytraceCUDA(pixels.data(), 
                          config.WIDTH, config.HEIGHT, 
                          pos, fwd, right, up,
-                         config.fov_y, 0.0);
+                         config.fov_y);
 
             glBindTexture(GL_TEXTURE_2D, textures);
             glTexSubImage2D(GL_TEXTURE_2D, 0,

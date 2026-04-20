@@ -30,6 +30,9 @@ add_executable(BlackHoleCUDA
     src/engine.cpp
     src/host.cpp   # host code — GCC
     cuda/geodesic.cu         # device code — NVCC
+    src/lodepng.cpp
+    src/starmap.cpp
+    src/perlin.cpp
 )
 
 target_link_libraries(BlackHoleCUDA PRIVATE

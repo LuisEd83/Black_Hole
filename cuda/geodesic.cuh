@@ -1,5 +1,4 @@
 #pragma once
-// checar isso
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // geodesic.cuh
@@ -17,9 +16,9 @@
 // constantes físicas
 
 
-static const double c = 299792458.0;  // velocidade da luz (m/s)
-static const double G        = 6.67430e-11; // constante de gravitação universal, m³/(kg·s²)
-static const double BH_MASS  = 8.54e36;     // massa de Sagittarius A*, kg
+static const double c       = 299792458.0;  // velocidade da luz (m/s)
+static const double G       = 6.67430e-11; // constante de gravitação universal, m³/(kg·s²)
+static const double BH_MASS = 8.54e36;     // massa de Sagittarius A*, kg
 
 // Schwarzschild radius: r_s = 2GM/c²
 // raio do horizonte de eventos — abaixo disso, a luz não escapa
@@ -62,7 +61,14 @@ __global__ void raytraceKernel( unsigned char* pixels,
                                 double3 cam_right,
                                 double3 cam_up,
                                 float fov_y,
-                                double rs );
+                                double rs,
+                                cudaTextureObject_t starmap,
+                                cudaTextureObject_t perlin
+                               );
 
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+extern __device__ cudaTextureObject_t starmap;
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

@@ -1,6 +1,9 @@
+output.png
+sim
 todo
 data/
 blackhole/
 python/
 build/
 .cache/
+.clangd

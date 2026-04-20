@@ -1,17 +1,14 @@
-// -------------------------------------------------------------------------------------------------
-// geodesic_host.cpp
-//
 // Código host puro — compilado pelo GCC, sem NVCC.
 // Responsável por: alocar memória na GPU, lançar o kernel, copiar resultado de volta.
-//
-// A separação existe porque <vector>, <iostream> e GLM conflitam com o CCCL
-// (CUDA C++ Core Libraries) quando incluídos num arquivo .cu com CUDA 13+ e GCC 15.
 
 
+#include "starmap.hpp"
+#include "perlin.hpp"
 #include "../cuda/geodesic.cuh"
 
 #include <iostream>
 #include <glm/glm.hpp>
+#include <texture_types.h>
 
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -30,7 +27,7 @@ inline const double rs_local = 2.0 * G * BH_MASS / (c * c);
 
 void launchRaytrace( unsigned char* pixels, int WIDTH, int HEIGHT,
                      double3 pos, double3 fwd, double3 right, double3 up,
-                     float fov_y, double rs_local);
+                     float fov_y, double rs_local, cudaTextureObject_t starmap, cudaTextureObject_t perlin);
 
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -39,14 +36,15 @@ void launchRaytrace( unsigned char* pixels, int WIDTH, int HEIGHT,
 void raytraceCUDA( unsigned char* pixels,
                    int WIDTH, int HEIGHT,
                    glm::vec3 pos, glm::vec3 fwd, glm::vec3 right, glm::vec3 up,
-                   float fov_y, double rs){
+                   float fov_y){
+
     
     double3 c_pos   = { pos.x,   pos.y,   pos.z   };
     double3 c_fwd   = { fwd.x,   fwd.y,   fwd.z   };
     double3 c_right = { right.x, right.y, right.z };
     double3 c_up    = { up.x,    up.y,    up.z    };
 
-    launchRaytrace(pixels, WIDTH, HEIGHT, c_pos, c_fwd, c_right, c_up, fov_y, rs_local);
+    launchRaytrace(pixels, WIDTH, HEIGHT, c_pos, c_fwd, c_right, c_up, fov_y, rs_local, starmap, perlin);
 
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess)

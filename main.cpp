@@ -1,10 +1,14 @@
 #include "../cuda/geodesic.cuh"
+#include "src/starmap.hpp"
+#include "src/perlin.hpp"
+#include "src/lodepng.h"
 
 #include <glm/glm.hpp>
 #include <iostream>
 #include <vector>
 #include <chrono>
 #include <iomanip>
+
 
 /*
 
@@ -20,7 +24,7 @@
 void raytraceCUDA( unsigned char* pixels,
                    int WIDTH, int HEIGHT,
                    glm::vec3 pos, glm::vec3 fwd, glm::vec3 right, glm::vec3 up,
-                   float fov_y, double rs);
+                   float fov_y);
 
 
 int main() {
@@ -30,69 +34,99 @@ int main() {
     // parâmetros de teste
     
 
-
-    const int WIDTH  = 1000;
-    const int HEIGHT = 800;
+    const int WIDTH  = 1500;
+    const int HEIGHT = 1200;
     const int RUNS   = 5;       // quantas vezes rodar para média mais estável
 
-    // câmera olhando para a origem (onde o buraco negro está)
-    // posição em unidades de raio de Schwarzschild: câmera a ~30 rs de distância
-    const double cam_dist = RS * 30.0;
 
-    glm::vec3 pos       = glm::vec3(float(RS * 0.1), (RS * 0.5), float(cam_dist));
+    // câmera olhando para a origem (onde o buraco negro está)
+    const double factor = 30.0f;
+    const double cam_dist = RS * factor;
+
+    float fov_y     = 50.0f;
+    float elevation = glm::radians(20.0f);
+
+    glm::vec3 pos = glm::vec3(
+        float(cam_dist * cos(elevation)),    // x
+        0.0f,                                // y
+        float(cam_dist * sin(elevation))     // y
+    );
+
+
+        
     glm::vec3 target    = glm::vec3(0.0f, 0.0f, 0.0f);
     glm::vec3 world_up  = glm::vec3(0.0f, 1.0f, 0.0f);
+    
 
     glm::vec3 fwd   = glm::normalize(target - pos);
     glm::vec3 right = glm::normalize(glm::cross(fwd, world_up));
     glm::vec3 up    = glm::normalize(glm::cross(right, fwd));
-    float fov_y     = 60.0f;
     
-
+    
     std::vector<unsigned char>pixels(WIDTH * HEIGHT * 3, 0);
-    
+   
+
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // começando o kernel
    
     
-
+    std::cout << "\n";
     std::cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
-    std::cout << "\n[MAIN]: inicialização BlackHoleSim...\n";
+    std::cout << "\nInicialização BlackHoleSim\n";
     std::cout << "\n• Parâmetros da cena \n\n";
-    std::cout << "→ RS (Schwarzschild):  " << std::scientific << std::setprecision(3) << RS << " m\n";
-    std::cout << "→ distância câmera:    " << std::scientific << (double)cam_dist << " m" << "(30 RS)\n";
-    std::cout << "→ câmera pos:          (" << std::fixed << std::setprecision(2) << pos.x << ", " << pos.y << ", " << pos.z << ")\n";
-    std::cout << "→ câmera fwd:          (" << fwd.x << ", " << fwd.y << ", " << fwd.z << ")\n";
-    std::cout << "→ resolução:           " << WIDTH << "x" << HEIGHT << " = " << WIDTH*HEIGHT << " pixels\n";
-    std::cout << "→ blocos CUDA:         " << (WIDTH+15)/16 << "x" << (HEIGHT+15)/16 << " de 16x16 threads\n";
-    std::cout << "→ fov_y:               " << fov_y << " graus\n";
-   
+    std::cout << "  → RS (Schwarzschild):  " << std::fixed << std::setprecision(2) << RS << "m\n";
+    std::cout << "  → distância câmera:    " << std::fixed << std::setprecision(2) << (double)cam_dist << "m" << "( " << factor <<  " RS)\n";
+    std::cout << "  → elevação:            " << std::fixed << std::setprecision(2) << elevation << "°\n";
+    std::cout << "  → fov_y:               " << std::fixed << std::setprecision(2) << fov_y << "°\n";
 
+    std::cout << "  → câmera pos:          (" << std::fixed << std::setprecision(2) << pos.x << ", " << pos.y << ", " << pos.z << ")\n";
+    std::cout << "  → câmera fwd:          (" << fwd.x << ", " << fwd.y << ", " << fwd.z << ")\n";
+    std::cout << "  → resolução:           " << WIDTH << "x" << HEIGHT << " = " << WIDTH*HEIGHT << " pixels\n";
+    std::cout << "  → blocos CUDA:         " << (WIDTH+15)/16 << "x" << (HEIGHT+15)/16 << " de 16x16 threads\n";
+   
+    /*
     std::cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
     std::cout << "\n[MAIN]: Aquecendo GPU...\n";
     std::cout << "\n[1/2] iniciando contexto CUDA...";  // endl = flush implícito
-    
+    */
 
 
     auto t_warm0 = std::chrono::high_resolution_clock::now();
     
-        raytraceCUDA(pixels.data(), WIDTH, HEIGHT, pos, fwd, right, up, fov_y, RS);
+        raytraceCUDA(pixels.data(), WIDTH, HEIGHT, pos, fwd, right, up, fov_y);
     
     auto t_warm1 = std::chrono::high_resolution_clock::now();
  
 
-
+    
+    /*
     double warm_ms = std::chrono::duration<double, std::milli>(t_warm1 - t_warm0).count();
-    std::cout << "\n[2/2] warmup concluido: "
-              << std::fixed << std::setprecision(1) << warm_ms << " ms" << std::endl;
-
+    std::cout << "\n[2/2] warmup concluido: " << std::fixed << std::setprecision(1) << warm_ms << " ms" << std::endl;
+    
     cudaError_t warm_err = cudaGetLastError();
     if (warm_err != cudaSuccess)
         std::cerr << "\n[CUDA]: erro no warmup: " << cudaGetErrorString(warm_err) << "\n";
     else
         std::cout << "\n[CUDA]: sem erros detectados\n";
- 
+    */
+    
+    std::cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
+    std::cout << "\n• Abrindo arquivos de suporte: \n";
+
+    // carrega o starmap antes de qualquer kernel
+    if (!starmapLoad("data/starmap.png")) {
+        std::cerr << "\nFalha ao carregar starmap\n";
+
+        return 1;
+    }
+
+    if (!perlinLoad("data/perlin.txt")) {
+        std::cerr << "\nFalha ao carregar perlin\n";
+
+        return 1;
+    }
+
 
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -103,7 +137,7 @@ int main() {
     std::cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
     std::cout << "\n• Benchmark (" << RUNS << " runs)" << std::endl;
 
-    std::cout << "\n[MAIN] Rodando " << RUNS << " iterações...\n";
+    std::cout << "\n◦ Rodando " << RUNS << " iterações...\n\n";
 
     double total_ms = 0.0;
 
@@ -111,7 +145,7 @@ int main() {
             
         auto t0 = std::chrono::high_resolution_clock::now();
 
-        raytraceCUDA(pixels.data(), WIDTH, HEIGHT, pos, fwd, right, up, fov_y, RS);
+        raytraceCUDA(pixels.data(), WIDTH, HEIGHT, pos, fwd, right, up, fov_y);
         
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess)
@@ -122,8 +156,7 @@ int main() {
         double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
         total_ms += ms;
 
-        std::cout << "run " << (i+1) << ": " 
-                  << std::fixed << std::setprecision(2) << ms << " ms\n";
+        std::cout << "  → run " << (i+1) << ": " << std::fixed << std::setprecision(2) << ms << " ms\n";
     }
 
     
@@ -132,17 +165,15 @@ int main() {
     // resultados
 
 
-
     double avg_ms      = total_ms / RUNS;
     double pixels_per_sec = (WIDTH * HEIGHT) / (avg_ms / 1000.0);
 
     std::cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
     std::cout << "\n• Resultados\n\n";
-    std::cout << "→ resolução:        " << WIDTH << "×" << HEIGHT << "\n";
-    std::cout << "→ média:            " << std::fixed << std::setprecision(2) << avg_ms << " ms\n";
-    std::cout << "→ throughput:       " << std::scientific << std::setprecision(2) 
-              << pixels_per_sec << " pixels/s\n";
-
+    //std::cout << "  → resolução:        " << WIDTH << "×" << HEIGHT << "\n";
+    std::cout << "◦ Taxa de pixel:\n";
+    std::cout << "  → média:            " << std::fixed << std::setprecision(2) << avg_ms << "ms\n";
+    std::cout << "  → throughput:       " << std::scientific << std::setprecision(2)  << pixels_per_sec << " pixels/s\n";
     
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -157,8 +188,8 @@ int main() {
 
     for (int sx : sample_positions) {
         int idx = (row * WIDTH + sx) * 3;
-        std::cout << "pixel [" << std::setw(3) << sx << ", " << row << "]: "
-                  << "→ R=" << int(pixels[idx+0])
+        std::cout << "  → intervalo: [" << std::setw(3) << sx << ", " << row << "]: "
+                  << "R=" << int(pixels[idx+0])
                   << ", G=" << int(pixels[idx+1])
                   << ", B=" << int(pixels[idx+2]) << "\n";
     }
@@ -187,15 +218,37 @@ int main() {
     double total = WIDTH * HEIGHT;
 
     std::cout << "\n◦ Distribuição espacial dos pixels\n";
-    std::cout << "→ horizonte:  " << n_black    << " (" << 100.0*n_black/total    << "%)\n";
-    std::cout << "→ disco:      " << n_disk     << " (" << 100.0*n_disk/total     << "%)\n";
-    std::cout << "→ skybox:     " << n_sky      << " (" << 100.0*n_sky/total      << "%)\n";
-    std::cout << "→ fallback:   " << n_fallback << " (" << 100.0*n_fallback/total << "%)\n";
-    std::cout << "→ outros:     " << n_other    << " (" << 100.0*n_other/total    << "%)\n";
+    std::cout << "  → horizonte:  " << n_black     << ", " << std::fixed << std::setprecision(2) << 100.0*n_black/total << "%\n";
+    std::cout << "  → disco:      " << n_disk      << ", " << std::fixed << std::setprecision(2) << 100.0*n_disk/total  << "%\n";
+    std::cout << "  → skybox:     " << n_sky       << ", " << std::fixed << std::setprecision(2) << 100.0*n_sky/total   << "%\n";
+    std::cout << "  → fallback:   " << n_fallback  << ", " << std::fixed << std::setprecision(2) << 100.0*n_fallback/total << "%\n";
+    std::cout << "  → outros:     " << n_other     << ", " << std::fixed << std::setprecision(2) << 100.0*n_other/total << "%\n";
 
+
+    // salva o último frame como PNG
+    std::vector<unsigned char> png_pixels(WIDTH * HEIGHT * 4);
+    for (int i = 0; i < WIDTH * HEIGHT; i++) {
+        png_pixels[i*4+0] = pixels[i*3+0];  // R
+        png_pixels[i*4+1] = pixels[i*3+1];  // G
+        png_pixels[i*4+2] = pixels[i*3+2];  // B
+        png_pixels[i*4+3] = 255;            // A
+    }
+    
+    unsigned error = lodepng::encode("output.png", png_pixels, WIDTH, HEIGHT);
+
+    if (error)
+        std::cerr << "Erro de imagem: " << lodepng_error_text(error) << "\n";
+    else
+        std::cout << "\n◦ Imagem salva em output.png\n";
+ 
+    std::cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
 
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+    starmapFree();
+    perlinFree();
 
 
     return 0;
