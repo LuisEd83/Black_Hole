@@ -26,13 +26,14 @@ bool starmapLoad(const char* path){
 
     unsigned err = lodepng::decode(image, width, height, path);
     if(err){
-        std::cerr << "\n    → [STARMAP]: Erro ao carregar " << path << ": " << lodepng_error_text(err) << "\n";
+        std::cerr << "\n    → [IMG]: Erro ao carregar " << path << ": " << lodepng_error_text(err) << "\n";
 
         return false;
     }
 
-    std::cout << "\n    → [STARMAP]: Carregado: " << width << "x" << height << " (" << image.size()/1024/1024 << " MB)";
-    
+
+    std::cout << "\n    → [IMG]: Starmap carregado. Dimensões: " << width << "x" << height << " (" << image.size()/1024/1024 << " MB)";
+   
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // cria cudaArray com formato RGBA8
@@ -76,7 +77,7 @@ bool starmapLoad(const char* path){
     }
 
 
-    std::cout << "\n    → [IMG]: Starmap/CUDA, textura criada (obj=" << starmap << ")";
+    std::cout << "\n    → [IMG]: Starmap/CUDA, textura criada (obj=" << starmap << ")\n";
     return true;
 }
 

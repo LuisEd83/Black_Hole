@@ -79,7 +79,6 @@ static GLuint compileShaders(GLenum type, const char* src){
 
     /*    
         helper para compilar e resgatar informação do processamento de shaders.
-        
     */
 
 
@@ -146,9 +145,14 @@ static GLuint buildProgram(const char* vert, const char* frag){
 static GLuint makeGLFrameTexture(int WIDTH, int HEIGHT){
         
     /*
-        
-    
-
+        função que prepara uma textura vazia na GPU que será eventualmente completa pelos
+        pixels CUDA.
+            
+            → glGenTextures reserva um id,
+            → glBindTexture binda, leva a textura vazia à textura na GPU,
+            → glTexImage2D aloca memória,
+            → os Parametri definem não intepolação, executar CLAMP em [0,1],
+            → glBindTexture(0) desbinda para evitar chamadas acidentais.
     */
 
 

@@ -1,9 +1,10 @@
-output.png
+output/
 sim
 todo
 data/
 blackhole/
-python/
 build/
 .cache/
 .clangd
+
+.gitkeep

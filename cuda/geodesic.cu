@@ -53,8 +53,7 @@ __device__ void geodesicRHS(const Rays& s, double rhs[6], double rs) {
 
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-/*
- rk4Step — integrador Runge-Kutta de 4ª ordem
+/* rk4Step — integrador Runge-Kutta de 4ª ordem
 
   Resolve as 6 EDOs acima em um passo de tamanho dl.
   Faz uma média ponderada de 4 avaliações da derivada em pontos distintos,
@@ -139,12 +138,23 @@ __device__ void rk4Step(Rays& s, double dl, double rs){
 __device__ float dopplerShift(double phi, double r_current, double3 camera_pos, double rs){
     
     /*
-        
+            
+        O disco gira em torno do buraco negro. O lado esquerdo (para um observador padrão)
+        se aproxima da câmera — luz comprimida, mais azul, mais brilhante.
+        O lado direito se afasta — luz esticada, mais vermelho, mais escura.
+    
         Fórmulas:
 
             v/c = sqrt(rs / (2*r - rs))
             D = 1 / (γ * (1 - v/c * cos(α))),   α: v∠ r_current
                                                 γ: 1/√(1 - v²/c²)      
+
+            A intensidade percebida escala com D^4 (3 de aberração + 1 de energia do fóton).
+            A cor percebida tem o comprimento de onda dividido por D:
+
+                D > 1: lado que se aproxima  → + brilhante, + azul
+                D < 1: lado que se afasta    → + escuro, + vermelho   
+               
     */
     
     double denominador = 2.0 * r_current - rs;
@@ -166,8 +176,8 @@ __device__ float dopplerShift(double phi, double r_current, double3 camera_pos, 
 
     dx /= dlen; dy /= dlen;
     
-
     double cos_alpha = vx * dx + vy * dy;
+
 
     double doppler = 1.0 / (gamma * (1.0 - beta * cos_alpha));
     
@@ -190,6 +200,81 @@ __device__ float perlinNoise(cudaTextureObject_t perlin,
     return noise.x;
 }
 
+
+__device__ float redShift(double r_current, double rs){
+        
+    /*
+        Um fóton emitido num raio r chega ao observador com a
+        sua frequência reduzida por um fator z:
+
+            z = 1 / sqrt(1 - rs/r).
+
+            → para r = rs,  z → ∞, a luz tem frequência reduzida por completo.
+            → para r = 2rs, z → sqrt(2), 41% de redução da luz.
+
+            Logo, quanto maior a distância, menor o efeito redshift.
+
+        Isso tem efeito na cor vista do disco, regiões mais próximas são
+        mais vermelhas porque perdem mais frequência. 
+    */
+
+    double z_grav = 1.0 / sqrt(1.0 - rs / r_current);
+    float freq_shift = (float)(1.0 / z_grav);
+
+    return freq_shift;
+
+}
+
+
+__device__ float diskEmissivity(double r_current, double z_cartesiano,
+                                double disk_r1, double disk_r2,
+                                double height_scale){
+    
+    /*
+    
+        Antes estávamos usando uma detecção binária (if(y_prev * y_next < 0.0)). Esse efeito causa
+        a perda de vários pontos que, na realidade assumem cores gradientes, mas são "colapsadas" pela
+        detecção. Com o disco volumétrico, conseguimos pegar esse gradiente pela acumulação da emissividade da luz.
+
+        Disco fino:
+            → detecta quando y muda de sinal (cruzamento do plano z=0)
+            → atribui uma cor e para (break)
+            → resultado: disco infinitamente fino, bordas pixeladas
+
+       Disco volumétrico:
+            → a cada step, verifica se o raio está DENTRO do volume do disco
+            → acumula emissividade * densidade * ds ao longo do caminho
+            → o raio NÃO para — continua integrando e somando contribuições
+            → resultado: disco com espessura, bordas suaves, múltiplas camadas visíveis
+    
+        Fórmulas:
+
+            • raio equatorial:  disk_r1 ≤ r_eq ≤ disk_r2
+            • altura vertical:  |z_cartesiano| ≤ H(r)   onde H(r) = r * escala_altura
+            • emissividade(r, z) = densidade(r, z) * temperatura(r)
+                onde:
+                    densidade(r, z) = exp(-z² / (2 * H²))          gaussiana vertical
+                    temperatura(r)  = (r / disk_r1)^(-3/4)         lei de potência radial
+            ↓
+            • cor += emissividade * cor_base(r) * Doppler^4 * redshift * step
+
+    */
+
+
+    if(r_current < disk_r1 || r_current > disk_r2) return 0.0f;
+    
+    double H = r_current * height_scale;
+    double gaussian = exp(-(z_cartesiano * z_cartesiano) / (2.0 * H * H));
+
+
+    // perfil radial de temperatura — disco interno mais quente
+    // T ∝ r^(-3/4) é a lei de Stefan-Boltzmann para disco de acreção
+    double t_normalized = (r_current - disk_r1) / (disk_r2 - disk_r1);  // [0,1]
+    double temp_profile = pow(1.0 - t_normalized * 0.8, 0.75);       // mais brilhante interno
+    
+    return (float)(gaussian * temp_profile);
+
+}
 
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -271,26 +356,77 @@ __global__ void raytraceKernel( unsigned char* pixels,
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // integração — loop principal do ray tracer
-        
 
-    const int MAX_STEPS = 2000;
-    const double step = rs * 1.0;
-    const double escape_radius = rs * 200.0;
+    
+    /*
+        step        —   tamanho de cada passo de integração em metros (rs * N). Menor = mais preciso, 
+                        bordas do disco mais suaves, photon ring mais visível, render mais lento. 
+                        Maior = mais rápido, mais aliasing, raios podem pular o horizonte. O passo adaptativo 
+                        já reduz automaticamente perto do horizonte.
+
+        MAX_STEPS       —   quantas iterações cada raio pode fazer. Determina se raios que orbitam múltiplas vezes 
+                            (photon ring) conseguem completar. Mais alto = photon ring aparece, render mais lento. 
+                            O tempo de render escala quase linearmente com MAX_STEPS para pixels que atingem o limite.
+
+        disk_r1         —   borda interna do disco em unidades de RS. Fisicamente deve ser ≥ 3 RS (ISCO — última órbita estável). 
+                            Menor que isso é ficção. Aumentar esconde a região mais brilhante próxima ao horizonte.
+
+        disk_r2         —   borda externa do disco. Controla o tamanho visual do disco. Maior = disco ocupa mais da tela. Se cam_dist < disk_r2 
+                            a câmera está dentro do disco — resultado é tela laranja.
+
+        escape_radius   —   distância que o kernel considera "infinito". Deve ser maior que cam_dist. Se muito pequeno, raios que deveriam chegar ao starmap são cortados antes. 
+                            RS * 200 é seguro para qualquer cam_dist até RS * 100.
+
+
+    */
+
+    const int MAX_STEPS = 5000;
+    const double step = rs * 0.50;
+
+    const double escape_radius = rs * 300.0;
+
     const double disk_r1 = rs * 3.0;
-    const double disk_r2 = rs * 10.0;
+    const double disk_r2 = rs * 12.0;
+    const double disk_height_scale = 0.10; // maior, aumenta espessura
+    const double disk_opacity = 0.95;
+    const double emission_scale = 2.0;
+    
+    const double adaptive_factor = 3.0f;
+    
+    float accum_r = 0.0f;       // canal vermelho acumulado
+    float accum_g = 0.0f;       // canal verde acumulado
+    float accum_b = 0.0f;       // canal azul acumulado
+    float accum_alpha = 0.0f;   // opacidade acumulada [0,1]
+                                // quando accum_alpha ≥ 1.0 → disco completamente opaco → break
+
 
     unsigned char R = 0, G = 0, B = 0;
 
     double y_prev = s.r * cos(s.theta);
 
-    
+  
+
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     
+    
+    enum class RayResult { 
+        NONE, 
+        HORIZON, 
+        ESCAPE, 
+        DISK, 
+        FALLBACK 
+    };
+    
+    RayResult result = RayResult::NONE;
+
 
     for(int i = 0; i < MAX_STEPS; i++){
       
         if(s.r <= rs || s.r <= 0.0){
             R = G = B = 0;
+
+            result = RayResult::HORIZON;
             break;
         }
     
@@ -314,14 +450,15 @@ __global__ void raytraceKernel( unsigned char* pixels,
             R = (unsigned char)(fminf(color.x * 255.0f, 255.0f));
             G = (unsigned char)(fminf(color.y * 255.0f, 255.0f));
             B = (unsigned char)(fminf(color.z * 255.0f, 255.0f));
-
+    
+            result = RayResult::ESCAPE;
             break;
         }
 
 
         double adaptive_step = step;
         if(s.r < rs * 5.0){
-            adaptive_step = step * (s.r / (rs * 5.0));  // escala linear: a 1rs → step/5
+            adaptive_step = step * (s.r / (rs * adaptive_factor));  // escala linear: a 1rs → step/5
             if(adaptive_step < step * 0.005) adaptive_step = step * 0.005;  // mínimo
         }
 
@@ -358,12 +495,15 @@ __global__ void raytraceKernel( unsigned char* pixels,
         
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
+            
+            double r_prev_step = s.r;
     
             rk4Step(s, adaptive_step, rs);
                 
             if(s.r <= rs || s.r <= 0.0 || s.r != s.r){
                 R = G = B = 0;
+
+                result = RayResult::HORIZON;
                 break;
             }
                     
@@ -396,26 +536,19 @@ __global__ void raytraceKernel( unsigned char* pixels,
             */
             // ─────────────────────────────────────────────────────────────────────────────────────────────────
     
-
+        /* classificador binário.
         if(y_prev * y_next < 0.0){
 
                 // ─────────────────────────────────────────────────────────────────────────────────────────────────
-                /*
                 if(s.r/rs > 210)
                     printf("[debug] - DISCO no step %d: r/rs=%.3f\n", i, s.r/rs);
-                */
                 // ─────────────────────────────────────────────────────────────────────────────────────────────────
-            /*
-            */
 
-            double r_current = s.r;
+            //double r_current = s.r;
+
+            double frac  = fabs(y_prev) / (fabs(y_prev) + fabs(y_next));
+            double r_current = r_prev_step + frac * (s.r - r_prev_step);
             double phi = s.phi;
-            //double frac  = fabs(y_prev) / (fabs(y_prev) + fabs(y_next));
-            //double r_cross = s.r;   // aproximação — poderia interpolar mais fino
-
-            //double disk_height = r_cross * 0.1;
-            //double y_cross = y_prev + frac * (y_next - y_prev);  // deve ser ~0
-
 
             if(r_current >= disk_r1 && r_current <= disk_r2){
 
@@ -428,15 +561,21 @@ __global__ void raytraceKernel( unsigned char* pixels,
 
 
                 // aplicando doppler
-                // D > 1: lado que se aproxima  → + brilhante, + azul
-                // D < 1: lado que se afasta    → + escuro, + vermelho   
-                
-                float doppler = 1.0f;
+                float doppler = dopplerShift(phi, r_current, cam_position, rs);
+    
 
-                //float doppler = dopplerShift(phi, r_current, cam_position, rs);
-                float intensity = base_brightness * (float)pow((double)doppler, 4.0);
+                // aplicando redshift
+                float redshift = redShift(r_current, rs);
+
+                    
+                // combinando doppler e redshift:
+                float combined = doppler * redshift;
                 
-                
+                //float intensity = base_brightness * (float)powf(combined, 4.0);
+                float intensity = base_brightness * powf(combined, 3.0f);
+                intensity = fminf(intensity, 5.0f);
+
+
                 float r, g, b;
                 
                 if(doppler >= 1.0f){
@@ -461,14 +600,61 @@ __global__ void raytraceKernel( unsigned char* pixels,
                 R = (unsigned char)(fminf(r * intensity * 255.0f, 255.0f));
                 G = (unsigned char)(fminf(g * intensity * 255.0f, 255.0f));
                 B = (unsigned char)(fminf(b * intensity * 255.0f, 255.0f));
-
+            
+                result = RayResult::DISK;
                 break;
             }
+        }
+        */
+        
+        
+        
+        double x_cartesiano = s.r * sin(s.theta) * cos(s.phi);
+        double y_cartesiano = s.r * sin(s.theta) * sin(s.phi);
+        double z_cartesiano = s.r * cos(s.theta);
+        
+        double r_current = sqrt(x_cartesiano*x_cartesiano +  y_cartesiano*y_cartesiano);
+        float emissividade = diskEmissivity(r_current, z_cartesiano, disk_r1, disk_r2, disk_height_scale);
+            
+        // detecção por emissividade de disco volumétrico
+        if(emissividade > 0.001f){
+            
+            float doppler = dopplerShift(r_current, s.phi, cam_position, rs);
+            float z_grav = (float)(1.0 / sqrt(fmax(1.0 - rs/s.r, 1e-6)));
+            float freq = doppler / z_grav;
+
+            float t = (float)((r_current - disk_r1) / (disk_r2 - disk_r1));
+            float disk_r = 1.0f;
+            float disk_g = 180.0f/255.0f * (1.0 - t * 0.7f);
+            float disk_b = 50.0f/255.0f * (1.0 - t);
+
+            float intensity = emissividade * emission_scale * powf(fmax(freq, 0.01f), 3.0f);
+            
+            float step_normalized = (float)(adaptive_step / (disk_r2 - disk_r1));
+            float contribution = intensity * step_normalized * disk_opacity;
+
+            float remaining = 1.0f - accum_alpha;
+            accum_r     += disk_r * contribution * remaining;
+            accum_g     += disk_g * contribution * remaining;
+            accum_b     += disk_b * contribution * remaining;
+
+            accum_alpha += contribution * remaining;
+
+            // disco completamente opaco → para de integrar
+            if (accum_alpha >= 1.0f){
+                accum_alpha = 1.0f;
+                break;
+            }
+            
+            result = RayResult::DISK;
         }
 
         y_prev = y_next;
     }
+
+
     
+    if (result == RayResult::NONE) result = RayResult::FALLBACK;
 
         // ─────────────────────────────────────────────────────────────────────────────────────────────────
         /*  
@@ -476,22 +662,43 @@ __global__ void raytraceKernel( unsigned char* pixels,
             printf("[debug] - MAX_STEPS atingido: r/rs=%.4f\n", s.r/rs);
         */    
         // ─────────────────────────────────────────────────────────────────────────────────────────────────
+        if (result == RayResult::HORIZON) {
+            R = G = B = 0;
 
+        }else if(result == RayResult::ESCAPE || result == RayResult::FALLBACK){
 
-    if(R == 0 && G == 0 && B == 0){
-        if (s.r < rs * 3.0) {
-            R = G = B = 0;   // muito perto — considerado capturado
+            if(result == RayResult::FALLBACK && s.r < rs * 4.0) {
+                R = G = B = 0;   // muito perto — considerado capturado
 
         } else {
 
             float u_tex = (float)(s.phi / (2.0 * M_PI)) + 0.5f;
             float v_tex = (float)(s.theta / M_PI);
+
             float4 color = tex2D<float4>(starmap, u_tex, v_tex);
+
             R = (unsigned char)(fminf(color.x * 255.0f, 255.0f));
             G = (unsigned char)(fminf(color.y * 255.0f, 255.0f));
             B = (unsigned char)(fminf(color.z * 255.0f, 255.0f));
         
         }
+    }
+
+    //if(result == RayResult::DISK && accum_alpha > 0.001f) {
+    if(accum_alpha > 0.001f){
+
+        // normaliza pela opacidade acumulada
+        //float inv_a = 1.0f / fmaxf(accum_alpha, 0.001f);
+
+        // fundo: cor do skybox ou horizonte (já calculada em R,G,B)
+        // compositing: disco na frente, fundo atrás
+        float bg_weight = 1.0f - fminf(accum_alpha, 1.0f);
+
+        R = (unsigned char)(fminf((accum_r + R/255.0f * bg_weight) * 255.0f, 255.0f));
+        G = (unsigned char)(fminf((accum_g + G/255.0f * bg_weight) * 255.0f, 255.0f));
+        B = (unsigned char)(fminf((accum_b + B/255.0f * bg_weight) * 255.0f, 255.0f));
+        
+        //printf("%f\n",fminf((accum_r + R/255.0f * bg_weight) * 255.0f, 255.0f));
     }
 
     int idx = (y * WIDTH + x) * 3;
@@ -514,6 +721,12 @@ void launchRaytrace( unsigned char* pixels,
                      float fov_y, double rs, cudaTextureObject_t starmap, cudaTextureObject_t perlin){
 
 
+    static bool flagSet = false;
+    if (!flagSet) {
+        cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync);
+        flagSet = true;
+    }
+
     size_t nbytes = WIDTH * HEIGHT * 3;
 
     unsigned char* d_pixels;
@@ -528,7 +741,8 @@ void launchRaytrace( unsigned char* pixels,
         d_pixels, WIDTH, HEIGHT, pos, fwd, right, up, fov_y, rs, starmap, perlin
     );
 
-    cudaDeviceSynchronize();
+    //cudaDeviceSynchronize();
+
     cudaMemcpy(pixels, d_pixels, nbytes, cudaMemcpyDeviceToHost);
     cudaFree(d_pixels);
 }

@@ -47,7 +47,7 @@ struct EngineConfig{
 struct CameraState{
     
     vec3 target = vec3(0.f);                // ponto no qual a câmera dista 'orbital_radius'
-    vec3 world_up = vec3(0.f, 1.f, 0.f);    //
+    vec3 world_up = vec3(0.f, 1.f, 0.f);    
  
     float azimuth_angle   = 0.f;    // radianos — rotação horizontal
     float elevation_angle = 0.f;    // radianos — rotação vertical
@@ -62,11 +62,8 @@ struct CameraState{
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // função que retorna os valores atuais a partir dos ângulos
 
+
     void getVectors(vec3 out_pos, vec3 out_fwd, vec3 out_right,vec3 out_up){
-        
-        /*
-        
-        */
 
 
         float cos_az = cos(azimuth_angle), sen_az = sin(azimuth_angle);

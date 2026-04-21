@@ -10,12 +10,13 @@
 #include <sstream>
 #include <fstream>
 
-cudaTextureObject_t perlin = 0;
 
+cudaTextureObject_t perlin = 0;
 static cudaArray_t perlin_array = nullptr;
 
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 
 bool perlinLoad(const char* path){
     
@@ -39,10 +40,8 @@ bool perlinLoad(const char* path){
         ss >> NR >> NPHI >> NZ;
     }
 
-    std::cout << "\n    → [IMG]: Dimensões Perlin: " << NR << "x" << NPHI << "x" << NZ;
- 
     size_t total = (size_t)NR * NPHI * NZ;
-        
+
     
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // lendo linha-a-linha
@@ -66,6 +65,8 @@ bool perlinLoad(const char* path){
             return false;
         }
     }
+    
+    std::cout << "\n    → [IMG]: Perlin carregado. Dimensões: " << NR << "x" << NPHI << "x" << NZ << " (" << perlin_noise.size()/1024/1024 << " MB)";
 
     if(perlin_noise.size() != total){
         
@@ -78,6 +79,7 @@ bool perlinLoad(const char* path){
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // cria cudaArray 
 
+
     cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<float>();
     
     cudaExtent extensao = make_cudaExtent(NR, NPHI, NZ);
@@ -89,7 +91,7 @@ bool perlinLoad(const char* path){
     copyParams.dstArray = perlin_array;
     copyParams.extent = extensao;
     copyParams.kind = cudaMemcpyHostToDevice;
-    
+     
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess) {
         std::cerr << "\n    → [IMG]: Erro Perlin/CUDA: " << cudaGetErrorString(err) << "\n";
@@ -121,6 +123,7 @@ bool perlinLoad(const char* path){
         std::cerr << "\n    → [IMG]: Erro Perlin/CUDA: " << cudaGetErrorString(err2) << "\n";
         return false;
     }
+
 
     std::cout << "\n    → [IMG]: Perlin/CUDA, textura criada (obj=" << perlin << ")" << "\n";
 

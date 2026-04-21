@@ -14,12 +14,12 @@
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 /* raytraceCUDA — chamada pelo gl_engine.cpp a cada frame em que a câmera muda
 
-    pixels  → buffer RGB já alocado pelo caller (WIDTH * HEIGHT * 3 bytes)
-    pos     → posição da câmera em coordenadas cartesianas
-    fwd     → vetor forward normalizado
-    right   → vetor right normalizado
-    up      → vetor up normalizado
-    fov_y   → campo de visão vertical em graus
+        pixels  → buffer RGB já alocado pelo caller (WIDTH * HEIGHT * 3 bytes)
+        pos     → posição da câmera em coordenadas cartesianas
+        fwd     → vetor forward normalizado
+        right   → vetor right normalizado
+        up      → vetor up normalizado
+        fov_y   → campo de visão vertical em graus
 */ 
 
 
