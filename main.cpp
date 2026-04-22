@@ -1,4 +1,6 @@
 #include "../cuda/geodesic.cuh"
+//#include "feedbacks.cuh"
+
 #include "src/starmap.hpp"
 #include "src/perlin.hpp"
 #include "src/lodepng.h"
@@ -30,6 +32,37 @@ void raytraceCUDA( unsigned char* pixels,
                    float fov_y);
 
 
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// parsing rápido de resolução
+
+
+enum class Resolution {
+        Minimal,
+        HD,
+        HDplus,
+        FHD,
+        QHD,
+        UHD,
+        _4K,
+        Unknown
+    };
+   
+
+ Resolution fromString(const std::string& s){
+        if (s == "Minimal") return Resolution::Minimal;
+        if (s == "HD")      return Resolution::HD;
+        if (s == "HD+")      return Resolution::HDplus;
+        if (s == "FHD")     return Resolution::FHD;
+        if (s == "QHD")     return Resolution::QHD;
+        if (s == "UHD")     return Resolution::UHD;
+        if (s == "4K")      return Resolution::_4K;
+        return Resolution::Unknown;
+    }
+
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
 int main() {
     
 
@@ -49,60 +82,97 @@ int main() {
     // parâmetros de teste
    
 
-    /*
-        Resoluções que estão sendo utilizadas:
-            
-            0800 x 600,
-            1280 x 720 [HD],
-            1920 x 1080 [FHD],
-            2560 x 1440 [QHD],
-            3840 x 2160 [UHD].
-            
-    */
     
     /*
 
         factor —    distância da câmera em unidades de RS. Maior = buraco negro menor na tela, mais contexto ao redor. Menor = buraco negro domina o frame, mais distorção nas bordas. Abaixo de ~5 RS a câmera entra na região onde o lensing distorce a própria imagem da câmera.
                     graus / elevation — ângulo acima do plano do disco. 0° = vista lateral, disco como linha. 90° = vista de cima, disco como anel. 20-45° = visual do Interstellar. Muda radicalmente a forma do disco na imagem.
 
-        fov_y —     zoom. Menor = mais zoom, buraco negro maior, bordas menos distorcidas. Maior = grande angular, mais cena visível, bordas com mais aberração. 20° é bem fechado — buraco negro ocupa mais da tela.
-        pos.x —     componente horizontal da posição da câmera. Com a fórmula atual é cam_dist * cos(elevation) — mudar isso sem mudar pos.z rotaciona a câmera em azimute, mudando de qual lado o Doppler aparece mais brilhante.
-        pos.y —     altura cartesiana. Atualmente 0.0 — se colocar um valor aqui a câmera sai do plano xz e o buraco negro aparece ligeiramente rotacionado. Normalmente deixa em zero.
-        pos.z —     componente que determina theta0 no kernel — é o que realmente controla a elevação. cam_dist * sin(elevation) — quanto maior, mais acima do disco a câmera está.
-        target  —    para onde a câmera aponta. Sempre (0,0,0) para olhar para o buraco negro. Mudar isso desloca o frame — útil para composição mas fisicamente não muda a simulação.
-        world_up    —  define o "cima" da câmera. (0,1,0) é o padrão. Se a câmera estiver muito próxima de 90° de elevação, mude para (1,0,0) para evitar gimbal lock.
-        fwd,right,up    — vetores de câmera calculados automaticamente a partir de pos, target e world_up. Não mude manualmente — são consequência dos outros.
-        RUNS — quantas vezes o kernel é executado para calcular a média de tempo. Não afeta a imagem, só a precisão do benchmark. Para desenvolvimento use 1, para benchmark use 5.
+        fov_y   —   zoom. Menor = mais zoom, buraco negro maior, bordas menos distorcidas. Maior = grande angular, mais cena visível, 
+                    bordas com mais aberração. 20° é bem fechado — buraco negro ocupa mais da tela.
 
+        pos.x   —   componente horizontal da posição da câmera. Com a fórmula atual é cam_dist * cos(elevation) — mudar isso sem mudar 
+                    pos.z rotaciona a câmera em azimute, mudando de qual lado o Doppler aparece mais brilhante.
+
+        pos.y   —   altura cartesiana. Atualmente 0.0 — se colocar um valor aqui a câmera sai do plano xz e o buraco negro aparece 
+                    ligeiramente rotacionado. Normalmente deixa em zero.
+
+        pos.z   —   componente que determina theta0 no kernel — é o que realmente controla a elevação. 
+                    cam_dist * sin(elevation) — quanto maior, mais acima do disco a câmera está.
+
+        target  —   para onde a câmera aponta. Sempre (0,0,0) para olhar para o buraco negro. 
+                    Mudar isso desloca o frame — útil para composição mas fisicamente não muda a simulação.
+
+        world_up    —   define o "cima" da câmera. (0,1,0) é o padrão. Se a câmera estiver muito próxima de 90° de elevação, 
+                        mude para (1,0,0) para evitar gimbal lock.
+
+        fwd,right,up    —   vetores de câmera calculados automaticamente a partir de pos, target e world_up. 
+                            Não mude manualmente — são consequência dos outros.
+
+        RUNS    —   quantas vezes o kernel é executado para calcular a média de tempo. Não afeta a imagem, só a precisão do benchmark. 
+                    Para desenvolvimento use 1, para benchmark use 5.
+        
+        small_angle —
     */
+    
+     
+    int WIDTH = 800;
+    int HEIGHT = 600;
 
+     /*
+        Resoluções que estão sendo utilizadas:
+            
+            0800 x 600, [Minimal]
+            1280 x 720 [HD],
+            1920 x 1080 [FHD],
+            2560 x 1440 [QHD],
+            3840 x 2160 [UHD].
+            4096x2048 [4K]
+    */
+   
+    std::string res = "Minimal";
 
+    switch (fromString(res)) {
+        case Resolution::Minimal: WIDTH = 800;  HEIGHT = 600;  break;
+        case Resolution::HD:      WIDTH = 1280; HEIGHT = 720;  break;
+        case Resolution::HDplus:      WIDTH = 1600; HEIGHT = 900;  break;
+        case Resolution::FHD:     WIDTH = 1920; HEIGHT = 1080; break;
+        case Resolution::QHD:     WIDTH = 2560; HEIGHT = 1440; break;
+        case Resolution::UHD:     WIDTH = 3840; HEIGHT = 2160; break;
+        case Resolution::_4K:      WIDTH = 4096; HEIGHT = 2048; break;
+        default:
+            std::cerr << "Resolução desconhecida: " << res << "\n";
+            return 1;
+    }
 
-    const int WIDTH  = 800;
-    const int HEIGHT = 600;
+    
     const int RUNS   = 1;       // quantas vezes rodar para média de tempo 
     // bom = 5
 
 
     // câmera olhando para a origem (onde o buraco negro está)
     const double factor = 20.0f;
-    const double graus = 5.0f;
-    const double small_angle = 10.0f;
+    const double graus = 10.0f;
+    const double elevation_angle = 80.0f;
+    const double tame = 0.4f;
     float fov_y = 50.0f;
 
-
+    
 
     const double cam_dist = RS * factor;
     float elevation = glm::radians((float)graus);
-    float azimuth  = glm::radians((float)small_angle); 
-
+    float azimuth  = glm::radians((float)90 - elevation_angle); 
+    
     glm::vec3 pos = glm::vec3(
-        float(cam_dist * cos(elevation) * cos(azimuth)), 
-        float(cam_dist * sin(elevation)),
-        float(cam_dist) * cos(elevation) * sin(azimuth)
-    );
+        float(cam_dist) * cos(graus),
+        float(cam_dist) * sin(graus),
+        float(cam_dist) * cos(azimuth) * tame
 
-        
+        //float(cam_dist) * cos(azimuth) * tame
+    );
+    
+    
+    
     glm::vec3 target    = glm::vec3(0.0f, 0.0f, 0.0f);
     glm::vec3 world_up  = glm::vec3(0.0f, 0.0f, 1.0f);
     
@@ -145,7 +215,7 @@ int main() {
 
     std::cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
     std::cout << "\n• Aquecendo GPU...\n";
-    
+     
     std::cout << "\n    → Temperatura CPU Posterior: ";
     std::flush(std::cout);
         system("echo $(($(cat /sys/class/thermal/thermal_zone0/temp)/1000))°C");
@@ -198,6 +268,20 @@ int main() {
     else
         std::cout << "\n    ✓ Sem erros detectados\n";
     
+    // WIP
+    //warmupAndEstimate(WIDTH, HEIGHT, 5000, RS * 0.5, RS);
+    
+
+    auto now_      = std::chrono::system_clock::now();
+    std::time_t t_  = std::chrono::system_clock::to_time_t(now_);
+    std::tm* tm_now = std::localtime(&t_);
+ 
+    // soma warm_ms ao tempo atual para estimar quando o benchmark termina
+    double total_expected_ms = warm_ms * RUNS;
+    int extra_seconds = (int)(total_expected_ms / 1000.0);
+ 
+    std::time_t t_done = t_ + extra_seconds;
+    std::tm* tm_done   = std::localtime(&t_done);
     
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -230,7 +314,9 @@ int main() {
 
     std::cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
     std::cout << "\n• Benchmark (" << RUNS << " runs)" << std::endl;
-
+    
+    std::cout << "\n    ◦ Conclusão: ~" << std::setfill('0') << std::setw(2) << tm_done->tm_hour << ":" << std::setw(2) << tm_done->tm_min  << ":" << std::setw(2) << tm_done->tm_sec  << "\n";
+    
     std::cout << "\n    ◦ Rodando " << RUNS << " iterações...\n";
 
     double total_ms = 0.0;

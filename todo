@@ -1,0 +1,88 @@
+━ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+cmake -B build -S . && cmake --build build --clean-first && ./build/BlackHoleCUDA
+
+blackhole/
+│
+├── CMakeLists.txt
+├──  main.cpp
+│
+├── cuda/
+│   ├── geodesic.cu
+│   ├── WIP renderer.cuh        ← from anwoy: Ray struct, RK4, intersection
+│   ├── WIP noise.cuh           ← from anwoy: disk Perlin noise sampling
+│   └── WIP disk.cuh            ← from anwoy: disk geometry helpers
+│
+├── shaders/
+│   ├── display.vert        ← trivial fullscreen quad passthrough
+│   └── display.frag        ← samples the CUDA-written texture
+│
+├── data/
+│   ├── perlin.txt          ← generated (gitignored)
+│   └── starmap.png         ← generated (gitignored)
+│
+└── python/
+    ├── create_disk.py
+    ├── starmap_preprocess.py
+    └── requirements.txt
+   
+
+━ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+→ Misc:
+
+    • Fáceis:
+        
+        ◦ colocar tamanho do arquivo depois de salvo como: output_X
+
+    • Médias:
+        
+        ◦ output de info de kernel
+        ◦ medições de temperatura while(kernelActive)
+
+    • Difíceis:
+
+
+━ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+→ UI/UX:
+
+    • Eu quero poder VOAR pela simulação.
+
+
+━ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+→ Rendering:
+    
+    • fazer um modo heatmap só para ver o comportamento
+
+    • Temperature gradient — cor do disco baseada em temperatura física T ∝ r^(-3/4), que vai de azul-branco interno para vermelho externo, mais realista que o gradiente manual atual.
+    • Beaming relativístico — já temos Doppler de frequência, mas o beaming concentra a emissão na direção do movimento. O lado se aproximando fica não só mais brilhante mas também geometricamente mais estreito.
+    • Múltiplas imagens do disco — raios que orbitam 1.5 voltas antes de escapar formam uma segunda imagem do disco, mais fina, acima e abaixo da primeira. Está implícito na física mas MAX_STEPS atual pode estar cortando esses raios.
+    • Bloom/glow — pós-processamento no host: pixels muito brilhantes do disco sangram luz para os vizinhos. Feito com convolução gaussiana no buffer de pixels antes de salvar o PNG.
+        
+    ◦ cos decay / exploração real das bordas da sombra e dos polos do disco
+    
+
+━ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+→ Câmera:
+    
+    • ver se da pra andar.
+
+
+━ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+→ CUDA:
+    
+    • Real time
+        ◦ 10 segundos por frame é inviável para real time. O caminho para chegar a 30+ fps tem três etapas:
+        ◦ Etapa 1 — reduzir trabalho por pixel. O gargalo atual é que raios na fotosfera fazem milhares de steps. Com o passo adaptativo bem calibrado e um early exit agressivo para raios que claramente escapam, você pode chegar a ~500ms por frame.
+        ◦ Etapa 2 — resolução adaptativa. Renderiza em 480×270 (16x menos pixels) para movimentação de câmera e resolução completa só quando a câmera para. Isso é o que o cam.moving do kavan fazia com os 200×150 pixels — exatamente essa ideia. Com 16x menos pixels, 500ms vira ~30ms.
+        ◦ Etapa 3 — CUDA-GL interop. Atualmente o pipeline é kernel → cudaMemcpy para host → glTexSubImage2D para GPU. Isso copia os pixels duas vezes entre CPU e GPU desnecessariamente. Com cudaGraphicsGLRegisterImage o kernel escreve diretamente na textura OpenGL sem passar pelo host. Para frames pequenos o ganho é modesto, mas para 1080p é significativo.
+        ◦ A combinação das três etapas deve chegar a 30fps em resolução baixa e alguns segundos por frame em resolução alta — similar ao comportamento do Interstellar game engine onde você move em baixa res e a imagem "resolve" quando para.
+
+
+
+━ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+→ Resultados e Discussão:
+
+    • descrever os segmentos retos
+
+━ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+

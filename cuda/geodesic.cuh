@@ -4,7 +4,6 @@
 // geodesic.cuh
 // Header compartilhado entre geodesic.cu (NVCC) e geodesic_host.cpp (GCC).
 
-
 #include <cuda_runtime.h>
 
 #ifndef M_PI

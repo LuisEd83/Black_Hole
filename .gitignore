@@ -1,10 +1,9 @@
 output/
-sim
-todo
 data/
 blackhole/
 build/
 .cache/
+sim
 .clangd
-
 .gitkeep
+
