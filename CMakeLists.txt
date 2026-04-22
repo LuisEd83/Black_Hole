@@ -28,8 +28,9 @@ set(DEPS glfw GLEW::GLEW glm::glm OpenGL::GL)
 add_executable(BlackHoleCUDA
     main.cpp
     src/engine.cpp
-    src/host.cpp   # host code — GCC
-    cuda/geodesic.cu         # device code — NVCC
+    src/host.cpp
+    cuda/geodesic.cu
+    cuda/feedbacks.cu
     src/lodepng.cpp
     src/starmap.cpp
     src/perlin.cpp

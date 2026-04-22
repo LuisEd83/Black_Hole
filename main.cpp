@@ -1,5 +1,5 @@
 #include "../cuda/geodesic.cuh"
-//#include "feedbacks.cuh"
+#include "../cuda/feedbacks.cuh"
 
 #include "src/starmap.hpp"
 #include "src/perlin.hpp"
@@ -130,7 +130,7 @@ int main() {
             4096x2048 [4K]
     */
    
-    std::string res = "Minimal";
+    std::string res = "FHD";
 
     switch (fromString(res)) {
         case Resolution::Minimal: WIDTH = 800;  HEIGHT = 600;  break;
@@ -207,6 +207,18 @@ int main() {
     std::cout << "  → resolução:           " << WIDTH << "x" << HEIGHT << " = " << WIDTH*HEIGHT << " pixels\n";
     std::cout << "  → blocos CUDA:         " << (WIDTH+15)/16 << "x" << (HEIGHT+15)/16 << " de 16x16 threads\n";
        
+    
+    
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // estimativas:
+    
+
+
+    std::cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
+    std::cout << "\n• Estimativas da Simulação\n";
+    
+    warmupAndEstimate(WIDTH, HEIGHT, 5000, RS * 0.5, RS);
+  
 
     
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -268,25 +280,10 @@ int main() {
     else
         std::cout << "\n    ✓ Sem erros detectados\n";
     
-    // WIP
-    //warmupAndEstimate(WIDTH, HEIGHT, 5000, RS * 0.5, RS);
-    
-
-    auto now_      = std::chrono::system_clock::now();
-    std::time_t t_  = std::chrono::system_clock::to_time_t(now_);
-    std::tm* tm_now = std::localtime(&t_);
- 
-    // soma warm_ms ao tempo atual para estimar quando o benchmark termina
-    double total_expected_ms = warm_ms * RUNS;
-    int extra_seconds = (int)(total_expected_ms / 1000.0);
- 
-    std::time_t t_done = t_ + extra_seconds;
-    std::tm* tm_done   = std::localtime(&t_done);
-    
-
+     
+   
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // infos para o usuário
-
 
 
     std::cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
@@ -306,17 +303,37 @@ int main() {
     }
 
 
-
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // runs de benchmark
-    
 
 
     std::cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
     std::cout << "\n• Benchmark (" << RUNS << " runs)" << std::endl;
     
-    std::cout << "\n    ◦ Conclusão: ~" << std::setfill('0') << std::setw(2) << tm_done->tm_hour << ":" << std::setw(2) << tm_done->tm_min  << ":" << std::setw(2) << tm_done->tm_sec  << "\n";
-    
+
+    auto now_      = std::chrono::system_clock::now();
+    std::time_t t_ = std::chrono::system_clock::to_time_t(now_);
+
+    double total_expected_ms = warm_ms * RUNS;
+    int extra_seconds = (int)(total_expected_ms / 1000.0);
+
+    std::time_t t_done = t_ + extra_seconds;
+
+    // copia a struct antes da segunda chamada sobrescrever
+    std::tm tm_done = *std::localtime(&t_done);   // copia por valor
+    std::tm tm_now  = *std::localtime(&t_);       // agora pode chamar de novo
+
+    std::cout << "\n    ◦ Conclusão: ~"
+              << std::setfill('0') << std::setw(2) << tm_done.tm_hour << ":"
+              << std::setw(2) << tm_done.tm_min  << ":"
+              << std::setw(2) << tm_done.tm_sec
+              << " [Agora: "
+              << tm_now.tm_hour << ":"
+              << std::setw(2) << tm_now.tm_min  << ":"
+              << std::setw(2) << tm_now.tm_sec
+              << "]\n";
+
+     
     std::cout << "\n    ◦ Rodando " << RUNS << " iterações...\n";
 
     double total_ms = 0.0;

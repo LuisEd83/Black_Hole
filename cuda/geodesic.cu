@@ -1,4 +1,6 @@
 #include "geodesic.cuh"
+#include "feedbacks.cuh"
+
 #include <cmath>
 #include <iostream>
 
@@ -435,7 +437,7 @@ __global__ void raytraceKernel( unsigned char* pixels,
 
 
     const int MAX_STEPS = 10000;
-    const double step = rs * 0.75;
+    const double step = rs * 0.25;
 
     const double escape_radius = rs * 300.0;
 
@@ -925,6 +927,8 @@ __global__ void raytraceKernel( unsigned char* pixels,
 // wrapper para chamada do kernel
 
 
+#include <chrono>
+
 void launchRaytrace( unsigned char* pixels, 
                      int WIDTH, int HEIGHT,
                      double3 pos, double3 fwd, double3 right, double3 up,
@@ -936,6 +940,22 @@ void launchRaytrace( unsigned char* pixels,
         cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync);
         flagSet = true;
     }
+    
+             
+        // ─────────────────────────────────────────────────────────────────────────────────────────────────
+        /*
+        */
+        static double ms_per_frame = -1.0;
+        static auto   t_last       = std::chrono::high_resolution_clock::now();
+        if (ms_per_frame > 0.0) {
+            auto now     = std::chrono::high_resolution_clock::now();
+            double delta = std::chrono::duration<double, std::milli>(now - t_last).count();
+            // suaviza com média móvel exponencial — evita saltos por GC ou stall de driver
+            ms_per_frame = ms_per_frame * 0.9 + delta * 0.1;
+        }
+        t_last = std::chrono::high_resolution_clock::now();
+        // ─────────────────────────────────────────────────────────────────────────────────────────────────
+
 
     size_t nbytes = WIDTH * HEIGHT * 3;
 
@@ -954,7 +974,27 @@ void launchRaytrace( unsigned char* pixels,
     //cudaDeviceSynchronize();
 
     cudaMemcpy(pixels, d_pixels, nbytes, cudaMemcpyDeviceToHost);
+    
+
+
+
+    // ─────────────────────────────────────────────────────────────────────────────────────────────────
+    /*
+    */
+    if (ms_per_frame < 0.0) {
+        auto now = std::chrono::high_resolution_clock::now();
+        ms_per_frame = std::chrono::duration<double, std::milli>(now - t_last).count();
+    }
+    static double dummy_extrapolado = -1.0;  // populado pelo warmup na primeira vez
+    if (ms_per_frame > 0.0 && dummy_extrapolado > 0.0){
+        updateCorrectionFactor(ms_per_frame, dummy_extrapolado);
+        printf("a\n");
+    }
+    // ─────────────────────────────────────────────────────────────────────────────────────────────────
+
+
     cudaFree(d_pixels);
+
 }
 
 
