@@ -62,7 +62,7 @@ void updateCorrectionFactor(double real_ms, double dummy_ms){
 
 double getCorrectionFactor(){
 
-    double media = 32.0;
+    double media = 5.0;
     int    count = 0;
 
     if(FILE* f = fopen(FACTOR_FILE, "r")){
@@ -96,9 +96,9 @@ __global__ static void dummyKernel(int *dummy){
 
 __global__ static void geodesicDummy(   unsigned char* pixels,
                                         int WIDTH, int HEIGHT,
-                                        double rs,
                                         int maxSteps,
-                                        double step){
+                                        double step,
+                                        double rs){
 
     int x = blockIdx.x * blockDim.x + threadIdx.x;
     int y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -249,7 +249,7 @@ void warmupAndEstimate(int WIDTH, int HEIGHT, int maxSteps, double step, double 
     
 
         // Aquece mais uma vez com resolução pequena antes de medir
-        geodesicDummy<<<grid,block>>>(d_bench, BW, BH, rs, maxSteps, step);
+        geodesicDummy<<<grid,block>>>(d_bench, BW, BH, maxSteps, step, rs);
     
     CUDA_CHECK(cudaDeviceSynchronize());
 
@@ -262,7 +262,7 @@ void warmupAndEstimate(int WIDTH, int HEIGHT, int maxSteps, double step, double 
         
         auto tb = now();
 
-            geodesicDummy<<<grid,block>>>(d_bench, BW, BH, rs, maxSteps, step);
+            geodesicDummy<<<grid,block>>>(d_bench, BW, BH, maxSteps, step, rs);
     
         CUDA_CHECK(cudaDeviceSynchronize());
         
@@ -282,8 +282,10 @@ void warmupAndEstimate(int WIDTH, int HEIGHT, int maxSteps, double step, double 
 
 
     // ── 5. Estimativa extrapolada ─────────────────────────────────────────────
-    double estKernelMs = msPerPixel * WIDTH * HEIGHT* getCorrectionFactor();;
+    double estKernelMs = msPerPixel * WIDTH * HEIGHT* getCorrectionFactor();
     
+    std::cout << "\npixelMs" << msPerPixel << ", correction_factor: " << getCorrectionFactor(); 
+
     size_t testSize = 32 * 1024 * 1024; // 32 MB
     unsigned char *d_bw, *h_bw = new unsigned char[testSize];
     cudaMalloc(&d_bw, testSize);
@@ -309,13 +311,37 @@ void warmupAndEstimate(int WIDTH, int HEIGHT, int maxSteps, double step, double 
     
     std::cout << "        ├ memcpy GPU→CPU:   " << std::setw(8) << std::fixed << std::setprecision(2) << estMemcpyMs   << " ms\n";
     //std::cout << "           ▶ total por frame:  " << std::setw(8) << std::fixed << std::setprecision(2) << estTotalMs    << " ms\n";
-    std::cout << "        └ FPS esperado:     " << std::setw(8) << std::fixed << std::setprecision(1) << estFps        << " fps\n";
+    std::cout << "        ├ FPS esperado:     " << std::setw(8) << std::fixed << std::setprecision(1) << estFps        << " fps\n";
+        
+    
+    auto now_      = std::chrono::system_clock::now();
+    std::time_t t_ = std::chrono::system_clock::to_time_t(now_);
 
-    if (estFps < 1.0) {
+    int extra_seconds = (int)(estTotalMs/ 1000.0);
+
+    std::time_t t_done = t_ + extra_seconds;
+
+    // copia a struct antes da segunda chamada sobrescrever
+    std::tm tm_done = *std::localtime(&t_done);   // copia por valor
+    std::tm tm_now  = *std::localtime(&t_);       // agora pode chamar de novo
+
+    std::cout << "        └ Conclusão (benchmark): ~"
+              << std::setfill('0') << std::setw(2) << tm_done.tm_hour << ":"
+              << std::setw(2) << tm_done.tm_min  << ":"
+              << std::setw(2) << tm_done.tm_sec
+              << " [Agora: "
+              << tm_now.tm_hour << ":"
+              << std::setw(2) << tm_now.tm_min  << ":"
+              << std::setw(2) << tm_now.tm_sec
+              << "]\n";
+
+    /*
+    if (estFps < 1.0){
         std::cout << "\n    ⚠  Menos de 1 fps esperado. Considere:\n";
         std::cout << "        → Reduzir MAX_STEPS (atual: " << maxSteps << ")\n";
         std::cout << "        → Reduzir resolução (" << WIDTH << "x" << HEIGHT << ")\n";
         std::cout << "        → Aumentar step (passos maiores → menos iterações)\n\n";
     }
+    */
 
 }

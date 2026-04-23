@@ -1,6 +1,8 @@
 #include "../cuda/geodesic.cuh"
 #include "../cuda/feedbacks.cuh"
 
+
+#include "src/constants.hpp"
 #include "src/starmap.hpp"
 #include "src/perlin.hpp"
 #include "src/lodepng.h"
@@ -14,6 +16,7 @@
 #include <ctime>
 #include <sstream>
 #include <iomanip>
+
 
 /*
 
@@ -31,6 +34,25 @@ void raytraceCUDA( unsigned char* pixels,
                    glm::vec3 pos, glm::vec3 fwd, glm::vec3 right, glm::vec3 up,
                    float fov_y);
 
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// output de temperatura mais rápido:
+
+/*
+#include <nvml.h>
+
+float printGpuTemp(){
+
+    nvmlInit();
+    nvmlDevice_t device;
+    nvmlDeviceGetHandleByIndex(0, &device);
+    unsigned int temp;
+    nvmlDeviceGetTemperature(device, NVML_TEMPERATURE_GPU, &temp);
+    nvmlShutdown();
+    
+    return temp;
+}
+*/
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // parsing rápido de resolução
@@ -118,21 +140,10 @@ int main() {
      
     int WIDTH = 800;
     int HEIGHT = 600;
+    //std::string res = "Minimal";
 
-     /*
-        Resoluções que estão sendo utilizadas:
-            
-            0800 x 600, [Minimal]
-            1280 x 720 [HD],
-            1920 x 1080 [FHD],
-            2560 x 1440 [QHD],
-            3840 x 2160 [UHD].
-            4096x2048 [4K]
-    */
-   
-    std::string res = "FHD";
 
-    switch (fromString(res)) {
+    switch (fromString(BH::res)) {
         case Resolution::Minimal: WIDTH = 800;  HEIGHT = 600;  break;
         case Resolution::HD:      WIDTH = 1280; HEIGHT = 720;  break;
         case Resolution::HDplus:      WIDTH = 1600; HEIGHT = 900;  break;
@@ -141,7 +152,7 @@ int main() {
         case Resolution::UHD:     WIDTH = 3840; HEIGHT = 2160; break;
         case Resolution::_4K:      WIDTH = 4096; HEIGHT = 2048; break;
         default:
-            std::cerr << "Resolução desconhecida: " << res << "\n";
+            std::cerr << "Resolução desconhecida: " << BH::res << "\n";
             return 1;
     }
 
@@ -151,29 +162,30 @@ int main() {
 
 
     // câmera olhando para a origem (onde o buraco negro está)
-    const double factor = 20.0f;
+    const double factor = BH::factor;
+
     const double graus = 10.0f;
-    const double elevation_angle = 80.0f;
-    const double tame = 0.4f;
-    float fov_y = 50.0f;
+    const double elevation_angle = 5.0f;
+    //const double tame = 0.3f;
+    float fov_y = 60.0f;
 
     
 
-    const double cam_dist = RS * factor;
+    const double cam_dist = RS * BH::factor;
     float elevation = glm::radians((float)graus);
-    float azimuth  = glm::radians((float)90 - elevation_angle); 
+    float azimuth  = glm::radians((float)elevation_angle); 
     
     glm::vec3 pos = glm::vec3(
-        float(cam_dist) * cos(graus),
-        float(cam_dist) * sin(graus),
-        float(cam_dist) * cos(azimuth) * tame
+        float(cam_dist) * cos(elevation),
+        float(cam_dist) * cos(azimuth),
+        float(10 * BH::tame * cam_dist) * cos(azimuth) * BH::tame
 
         //float(cam_dist) * cos(azimuth) * tame
     );
     
     
     
-    glm::vec3 target    = glm::vec3(0.0f, 0.0f, 0.0f);
+    glm::vec3 target    = glm::vec3(float(RS * 3.5), 0.0f, 0.0f);
     glm::vec3 world_up  = glm::vec3(0.0f, 0.0f, 1.0f);
     
 
@@ -207,7 +219,27 @@ int main() {
     std::cout << "  → resolução:           " << WIDTH << "x" << HEIGHT << " = " << WIDTH*HEIGHT << " pixels\n";
     std::cout << "  → blocos CUDA:         " << (WIDTH+15)/16 << "x" << (HEIGHT+15)/16 << " de 16x16 threads\n";
        
-    
+     
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // infos para o usuário
+
+
+    std::cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
+    std::cout << "\n• Abrindo arquivos de suporte: \n";
+
+    // carrega o starmap antes de qualquer kernel
+    if (!starmapLoad("data/starmap.png")) {
+        std::cerr << "\nFalha ao carregar starmap\n";
+
+        return 1;
+    }
+
+    if (!perlinLoad("data/perlin.txt")) {
+        std::cerr << "\nFalha ao carregar perlin\n";
+
+        return 1;
+    }
+
     
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // estimativas:
@@ -217,13 +249,15 @@ int main() {
     std::cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
     std::cout << "\n• Estimativas da Simulação\n";
     
-    warmupAndEstimate(WIDTH, HEIGHT, 5000, RS * 0.5, RS);
+    warmupAndEstimate(WIDTH, HEIGHT, BH::MAX_STEPS, RS * BH::STEP_FACTOR, RS);
   
 
     
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-
+    /*
+       warmup retirado por agora 
+     */
 
     std::cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
     std::cout << "\n• Aquecendo GPU...\n";
@@ -243,12 +277,12 @@ int main() {
 
     auto t_warm0 = std::chrono::high_resolution_clock::now();
     
-        raytraceCUDA(pixels.data(), WIDTH, HEIGHT, pos, fwd, right, up, fov_y);
+        raytraceCUDA(pixels.data(), floor(WIDTH/2), floor(HEIGHT/2), pos, fwd, right, up, fov_y);
     
     auto t_warm1 = std::chrono::high_resolution_clock::now();
  
     double warm_ms = std::chrono::duration<double, std::milli>(t_warm1 - t_warm0).count();
-
+    warm_ms *= 4.0;
 
 
     std::cout << "    |" << "\n";
@@ -280,28 +314,7 @@ int main() {
     else
         std::cout << "\n    ✓ Sem erros detectados\n";
     
-     
-   
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // infos para o usuário
-
-
-    std::cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
-    std::cout << "\n• Abrindo arquivos de suporte: \n";
-
-    // carrega o starmap antes de qualquer kernel
-    if (!starmapLoad("data/starmap.png")) {
-        std::cerr << "\nFalha ao carregar starmap\n";
-
-        return 1;
-    }
-
-    if (!perlinLoad("data/perlin.txt")) {
-        std::cerr << "\nFalha ao carregar perlin\n";
-
-        return 1;
-    }
-
+  
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // runs de benchmark
@@ -433,7 +446,7 @@ int main() {
         else if (b > r && b > g)                n_sky++;
         else                                    n_other++;
     }
-            
+           
     double total = WIDTH * HEIGHT;
 
     std::cout << "\n◦ Distribuição espacial dos pixels\n";
@@ -442,9 +455,13 @@ int main() {
     std::cout << "  → skybox:     "  << std::fixed << std::setprecision(2) << 100.0*n_sky/total   << "%\n";
     std::cout << "  → fallback:   "  << std::fixed << std::setprecision(2) << 100.0*n_fallback/total << "%\n";
     std::cout << "  → outros:     "  << std::fixed << std::setprecision(2) << 100.0*n_other/total << "%\n";
-
     
+
+        
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // salva o último frame como PNG
+   
+
     std::vector<unsigned char> png_pixels(WIDTH * HEIGHT * 4);
     for (int i = 0; i < WIDTH * HEIGHT; i++) {
         png_pixels[i*4+0] = pixels[i*3+0];  // R
@@ -459,8 +476,9 @@ int main() {
     if (error)
         std::cerr << "\n◦ Erro de imagem: " << lodepng_error_text(error) << "\n";
     else
-        std::cout << "\n◦ Imagem salva em " << filename.str() << " \n";
- 
+        std::cout << "\n◦ Imagem salva em " << filename.str() <<  " (" << png_pixels.size()/1024/1024 << " MB)\n";
+        
+
     std::cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
 
 

@@ -11,6 +11,8 @@ find_package(glfw3    REQUIRED)
 find_package(glm      REQUIRED)
 find_package(OpenGL   REQUIRED)
 find_package(CUDAToolkit REQUIRED)
+find_package(Threads REQUIRED)
+
 
 set(DEPS glfw GLEW::GLEW glm::glm OpenGL::GL)
 
@@ -39,6 +41,8 @@ add_executable(BlackHoleCUDA
 target_link_libraries(BlackHoleCUDA PRIVATE
     ${DEPS}
     CUDA::cudart
+    Threads::Threads
+    #pthread
 )
 
 set_target_properties(BlackHoleCUDA PROPERTIES

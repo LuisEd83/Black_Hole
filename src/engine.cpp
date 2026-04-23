@@ -218,7 +218,7 @@ static void cursorPos(GLFWwindow* window, double x, double y){
     if(camera.elevation_angle < -limit) camera.elevation_angle = -limit;
     
 
-    camera.problem = true;
+    camera.will_rerender = true;
 }
 
 
@@ -228,7 +228,7 @@ static void scrollEvent(GLFWwindow*, double, double y_off){
     if(camera.orbital_radius < 1.0f) camera.orbital_radius = 1.0f;
 
 
-    camera.problem = true;
+    camera.will_rerender = true;
 }
 
 
@@ -331,7 +331,7 @@ void engineRun(const EngineConfig& config){
     vec3 dir = normalize(config.cam_pos - config.cam_target);
     camera.elevation_angle = asin(dir.y);
     camera.azimuth_angle = atan2(dir.z, dir.x);
-    camera.problem = true;
+    camera.will_rerender = true;
 
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -377,8 +377,8 @@ void engineRun(const EngineConfig& config){
 
         glfwPollEvents();
         
-        // relança kernel se deu problema
-        if(camera.problem){
+        // relança kernel se deu will_rerender
+        if(camera.will_rerender){
             
             vec3 pos, fwd, right, up;
             camera.getVectors(pos, fwd, right, up);
@@ -398,7 +398,7 @@ void engineRun(const EngineConfig& config){
 
             glBindTexture(GL_TEXTURE_2D, 0);
 
-            camera.problem = false;
+            camera.will_rerender = false;
 
         }
         

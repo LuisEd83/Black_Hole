@@ -56,7 +56,7 @@ struct CameraState{
     bool dragging        = false;
     double last_mouse_x  = 0.0;
     double last_mouse_y  = 0.0;
-    bool problem         = true;    // true → kernel precisa ser relançado
+    bool will_rerender      = true;    // true → kernel precisa ser relançado
     
     
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

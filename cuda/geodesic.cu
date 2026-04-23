@@ -1,3 +1,6 @@
+#include "../src/constants.hpp"
+#include "../src/state_heatmap.hpp"
+
 #include "geodesic.cuh"
 #include "feedbacks.cuh"
 
@@ -191,7 +194,7 @@ __device__ float perlinNoise(cudaTextureObject_t perlin,
                              double r_current, double phi,
                              double disk_r1, double disk_r2){
 
-    
+    //printf("%llu",perlin); 
     if(perlin == 0) return 1.0f;
 
     float u = (float)((r_current - disk_r1) / (disk_r2 - disk_r1));
@@ -279,8 +282,72 @@ __device__ float diskEmissivity(double r_current, double z_cartesiano,
 }
 
 
+__device__ void temperatureToColor(float t_normalized, float& disk_r, float& disk_g, float& disk_b){
+    
+    /*
+        física: um disco de acreção tem temperatura T(r) ∝ r^{-3/4}. 
+        A região interna (r ≈ 3rs) atinge ~10^7 K — emite em raios-X, 
+        cor percebida azul-branco. A região externa (r ≈ 12rs) está em 
+        ~10^5 K — laranja-vermelho.
+        
+        isso nos dá:
+
+            T_normalized: 0.0 = região externa (fria), 1.0 = região interna (quente)
+            baseado em blackbody aproximado para range 3000K-30000K
+
+                · temperatura quente → azul-branco
+                · temperatura fria   → laranja-vermelho
+                · ponto médio        → amarelo-laranja (cor do sol ~5800K)
+    */
+
+    if(t_normalized > 0.8f){
+        
+        // muito quente: branco com leve azul
+        float t = (t_normalized - 0.8f) / 0.2f;
+
+        disk_r = 1.0f;
+        disk_g = 1.0f;
+        disk_b = 0.8f + 0.2f * t;
+    
+    } else if(t_normalized > 0.5f){
+        
+        // quente: amarelo-branco
+        float t = (t_normalized - 0.5f) / 0.3f;
+        
+        disk_r = 1.0f;
+        disk_g = 0.7f + 0.3f * t;
+        disk_b = 0.1f + 0.7f * t;
+    
+    } else if(t_normalized > 0.2f){
+
+        // médio: laranja-amarelo
+        float t = (t_normalized - 0.2f) / 0.3f;
+
+        disk_r = 1.0f;
+        disk_g = 0.3f  + 0.4f * t;
+        disk_b = 0.0f + 0.1f * t;
+
+    } else {
+        
+        // frio: vermelho-laranja escuro
+        float t = t_normalized / 0.2f;
+        
+        disk_r = 0.6f + 0.4f * t;
+        disk_g = 0.05f + 0.25f * t;
+        disk_b = 0.0f;;
+    }
+    
+    
+
+}
+
+
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // raytraceKernel — kernel principal, um thread por pixel
+
+
+// necessário para computar as estruturas de print
+__device__ unsigned int d_state_counts[SH_NUM_STATES];
 
 
 __global__ void raytraceKernel( unsigned char* pixels,
@@ -434,21 +501,24 @@ __global__ void raytraceKernel( unsigned char* pixels,
         as variáveis abaixo são cruciais para o funcionamento do buraco negro.
         elas estão descritas em sequência de aparição no loop.
     */
+    
+    int perlin_count = 0;
 
-
-    const int MAX_STEPS = 10000;
-    const double step = rs * 0.25;
+    const double step = rs * BH::STEP_FACTOR;
+    
+    //const double step = rs * 0.05;
+    //const double ADAPTIVE_FACTOR = 5.0;
+    //const double MAX_STEPS = 5000;    
 
     const double escape_radius = rs * 300.0;
 
     const double disk_r1 = rs * 3.0;
     const double disk_r2 = rs * 12.0;
     
-    const double adaptive_factor = 5.0;
     const double adaptive_clamp = 0.001;
     
-    const double disk_height_scale = 0.15; // maior, aumenta espessura
-    const double disk_opacity = 2.0;
+    const double disk_height_scale = 0.05; // maior, aumenta espessura
+    const double disk_opacity = 4.0;
     const double emission_scale = 3.0;
     
     const double closeness = 5.0;
@@ -481,7 +551,7 @@ __global__ void raytraceKernel( unsigned char* pixels,
     
     
 
-    for(int i = 0; i < MAX_STEPS; i++){
+    for(int i = 0; i < BH::MAX_STEPS; i++){
         
         /*
             1. Horizonte PRÉ-step  → raio já estava dentro do horizonte antes de integrar
@@ -539,6 +609,7 @@ __global__ void raytraceKernel( unsigned char* pixels,
             B = (unsigned char)(fminf(color.z * 255.0f, 255.0f));
     
             result = RayResult::ESCAPE;
+            //SH_RECORD(d_state_counts, result); 
 
             break;
         }
@@ -564,8 +635,8 @@ __global__ void raytraceKernel( unsigned char* pixels,
 
         double adaptive_step = step;
 
-        if(s.r < adaptive_factor * rs){
-            adaptive_step = step * (s.r / (rs * adaptive_factor));  // escala linear: a 1rs → step/5
+        if(s.r < BH::ADAPTIVE_FACTOR * rs){
+            adaptive_step = step * (s.r / (rs * BH::ADAPTIVE_FACTOR));  // escala linear: a 1rs → step/5
             if(adaptive_step < step * adaptive_clamp) adaptive_step = step * adaptive_clamp;  // mínimo
         }
 
@@ -609,6 +680,8 @@ __global__ void raytraceKernel( unsigned char* pixels,
                 R = G = B = 0;
 
                 result = RayResult::HORIZON;
+                //SH_RECORD(d_state_counts, result); 
+
                 break;
             }
                     
@@ -742,12 +815,12 @@ __global__ void raytraceKernel( unsigned char* pixels,
            
 
         if(emissividade > 0.001f){
-           
-            /*
+            
+            perlin_count++;
 
+            /*
                 as variáveis comentadas eram declaradas no lugar em que
                 estão, e eram dedicadas à construção de um Disco Volumétrico.
-
             */
             //float z_grav = (float)(1.0 / sqrt(fmax(1.0 - rs/s.r, 1e-6)));
             
@@ -784,13 +857,16 @@ __global__ void raytraceKernel( unsigned char* pixels,
             float doppler = dopplerShift(r_current, s.phi, cam_position, rs);
             float rs_freq = redShift(r_current, rs);
             
-                
+            float perlin_noise = perlinNoise(perlin, r_current, s.phi, disk_r1, disk_r2);
+            float base_brightness = 0.4f + 0.6f * perlin_noise;
+
+
                 // ─────────────────────────────────────────────────────────────────────────────────────────────────
                 /* 
-                */
                 if (r_current < disk_r1 * 2.0 && emissividade > 0.01f && ((x == WIDTH/4 && y == HEIGHT/2) || (x == 3*WIDTH/4 && y == HEIGHT/2)))
                         printf("pixel=(%d,%d)  r_eq/rs=%.2f  phi=%.3f  doppler=%.3f\n",
                        x, y, r_current/rs, s.phi, doppler);
+                */
                 // ─────────────────────────────────────────────────────────────────────────────────────────────────
                
 
@@ -799,11 +875,20 @@ __global__ void raytraceKernel( unsigned char* pixels,
             
             //float freq = doppler * z_grav;
 
-            float t = (float)((r_current - disk_r1) / (disk_r2 - disk_r1));
+            float temp = (float)((r_current - disk_r1) / (disk_r2 - disk_r1));
+            float temp_norm = powf(1.0f - temp, 0.75f);
+            
+            float disk_r, disk_g, disk_b;
+            temperatureToColor(temp_norm, disk_r, disk_g, disk_b);
+
+
+            /*
+            pré temperature-gradient
             float disk_r = 1.0f;
             float disk_g = 180.0f/255.0f * (1.0 - t * 0.7f);
             float disk_b = 50.0f/255.0f * (1.0 - t);
-        
+            */
+                        
 
             // modula a cor base pelo shift de frequência
             // freq > 1 → empurra para branco/azul (se aproximando)
@@ -824,10 +909,16 @@ __global__ void raytraceKernel( unsigned char* pixels,
                 disk_b = disk_b + blend * (1.0f - disk_b);
 
             }
-
-            //float intensity = emissividade * emission_scale * powf(fmax(freq, 0.01f), 3.0f);
             
-            float intensity = emissividade * emission_scale * beam_effect;
+
+            // ─────────────────────────────────────────────────────────────────────────────────────────────────
+            //printf("perlin: %f, ",perlin_noise);
+            //printf("brightness: %f\n", base_brightness);
+            // ─────────────────────────────────────────────────────────────────────────────────────────────────
+           
+
+            //float intensity = emissividade  * emission_scale * beam_effect;
+            float intensity = emissividade * base_brightness * emission_scale * beam_effect;
             
             float step_normalized = (float)(adaptive_step / (disk_r2 - disk_r1));
             float contribution = intensity * step_normalized * disk_opacity;
@@ -840,6 +931,7 @@ __global__ void raytraceKernel( unsigned char* pixels,
             accum_alpha += contribution * remaining;
 
             result = RayResult::DISK;
+            //SH_RECORD(d_state_counts, result); 
 
             // disco completamente opaco → para de integrar
             if (accum_alpha >= 1.0f){
@@ -869,9 +961,12 @@ __global__ void raytraceKernel( unsigned char* pixels,
     
 
     
-    if (result == RayResult::NONE) result = RayResult::FALLBACK;
+    if (result == RayResult::NONE){ 
 
+        result = RayResult::FALLBACK;
+        //SH_RECORD(d_state_counts, result); 
 
+    }
         // ─────────────────────────────────────────────────────────────────────────────────────────────────
         /*  
         if(x == WIDTH/2 && y == HEIGHT/2)
@@ -919,6 +1014,16 @@ __global__ void raytraceKernel( unsigned char* pixels,
     pixels[idx+1] = G;
     pixels[idx+2] = B;
 
+    SH_RECORD(d_state_counts, result);
+
+
+    // ─────────────────────────────────────────────────────────────────────────────────────────────────
+    /*
+    if (x == WIDTH/2 && y == HEIGHT/2)
+        printf("[debug] perlin_samples=%d\n", perlin_count);
+    */
+    // ─────────────────────────────────────────────────────────────────────────────────────────────────
+    
 }
 
 
@@ -929,25 +1034,30 @@ __global__ void raytraceKernel( unsigned char* pixels,
 
 #include <chrono>
 
+
 void launchRaytrace( unsigned char* pixels, 
                      int WIDTH, int HEIGHT,
                      double3 pos, double3 fwd, double3 right, double3 up,
                      float fov_y, double rs, cudaTextureObject_t starmap, cudaTextureObject_t perlin){
 
-
-    static bool flagSet = false;
-    if (!flagSet) {
-        cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync);
-        flagSet = true;
-    }
     
-             
+        // ─────────────────────────────────────────────────────────────────────────────────────────────────
+        /*
+        */
+        static bool flagSet = false;
+        if (!flagSet) {
+            cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync);
+            flagSet = true;
+        }
+        // ─────────────────────────────────────────────────────────────────────────────────────────────────
+
         // ─────────────────────────────────────────────────────────────────────────────────────────────────
         /*
         */
         static double ms_per_frame = -1.0;
         static auto   t_last       = std::chrono::high_resolution_clock::now();
         if (ms_per_frame > 0.0) {
+        printf("ms_per_frame [1]: %f", ms_per_frame);
             auto now     = std::chrono::high_resolution_clock::now();
             double delta = std::chrono::duration<double, std::milli>(now - t_last).count();
             // suaviza com média móvel exponencial — evita saltos por GC ou stall de driver
@@ -959,9 +1069,16 @@ void launchRaytrace( unsigned char* pixels,
 
     size_t nbytes = WIDTH * HEIGHT * 3;
 
+    StateHeatmap state(WIDTH * HEIGHT, BH::is_sim);
+
     unsigned char* d_pixels;
     cudaMalloc(&d_pixels, nbytes);
     cudaMemset(d_pixels, 0, nbytes);
+    
+
+    unsigned int* d_counts_ptr = nullptr;
+    cudaGetSymbolAddress((void**)&d_counts_ptr, d_state_counts);
+    state.start(d_counts_ptr);
 
 
     dim3 blockSize(16, 16);
@@ -972,25 +1089,25 @@ void launchRaytrace( unsigned char* pixels,
     );
 
     //cudaDeviceSynchronize();
+    state.stop();
 
     cudaMemcpy(pixels, d_pixels, nbytes, cudaMemcpyDeviceToHost);
     
 
 
-
-    // ─────────────────────────────────────────────────────────────────────────────────────────────────
-    /*
-    */
-    if (ms_per_frame < 0.0) {
-        auto now = std::chrono::high_resolution_clock::now();
-        ms_per_frame = std::chrono::duration<double, std::milli>(now - t_last).count();
-    }
-    static double dummy_extrapolado = -1.0;  // populado pelo warmup na primeira vez
-    if (ms_per_frame > 0.0 && dummy_extrapolado > 0.0){
-        updateCorrectionFactor(ms_per_frame, dummy_extrapolado);
-        printf("a\n");
-    }
-    // ─────────────────────────────────────────────────────────────────────────────────────────────────
+        // ─────────────────────────────────────────────────────────────────────────────────────────────────
+        /*
+        */
+        printf("ms_per_frame [2]: %f", ms_per_frame);
+        if (ms_per_frame < 0.0) {
+            auto now = std::chrono::high_resolution_clock::now();
+            ms_per_frame = std::chrono::duration<double, std::milli>(now - t_last).count();
+        }
+        static double dummy_extrapolado = -1.0;  // populado pelo warmup na primeira vez
+        if (ms_per_frame > 0.0 && dummy_extrapolado > 0.0){
+            updateCorrectionFactor(ms_per_frame, dummy_extrapolado);
+        }
+        // ─────────────────────────────────────────────────────────────────────────────────────────────────
 
 
     cudaFree(d_pixels);
