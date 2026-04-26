@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.21)
+cmake_minimum_required(VERSION 3.24)
 project(BlackHoleSim LANGUAGES CXX CUDA)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -32,6 +32,7 @@ add_executable(BlackHoleCUDA
     src/engine.cpp
     src/host.cpp
     cuda/geodesic.cu
+    cuda/comms.cu
     cuda/feedbacks.cu
     src/lodepng.cpp
     src/starmap.cpp
@@ -47,7 +48,7 @@ target_link_libraries(BlackHoleCUDA PRIVATE
 
 set_target_properties(BlackHoleCUDA PROPERTIES
     CUDA_SEPARABLE_COMPILATION ON
-    CUDA_ARCHITECTURES         75
+    CUDA_ARCHITECTURES         native
     LINKER_LANGUAGE            CUDA     # deixa o NVCC fazer o link final
 )
 

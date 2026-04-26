@@ -1,4 +1,5 @@
 #include "feedbacks.cuh"
+#include "geodesic.cuh"
 
 #include <cuda_runtime.h>
 #include <iostream>
@@ -6,6 +7,9 @@
 #include <cmath>
 #include <chrono>
 #include <cstdio>
+
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 
 #define CUDA_CHECK(call)                                                \
@@ -20,10 +24,11 @@
 
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// funções de fator de correção:
 
 
 static constexpr const char* FACTOR_FILE = ".bh_correction_factor";
-static constexpr int   FACTOR_WARMUP     = 5;   // ignora os N primeiros frames (GPU ainda aquecendo)
+static constexpr int FACTOR_WARMUP     = 5;   // ignora os N primeiros frames (GPU ainda aquecendo)
 
 
 void updateCorrectionFactor(double real_ms, double dummy_ms){
@@ -284,7 +289,7 @@ void warmupAndEstimate(int WIDTH, int HEIGHT, int maxSteps, double step, double 
     // ── 5. Estimativa extrapolada ─────────────────────────────────────────────
     double estKernelMs = msPerPixel * WIDTH * HEIGHT* getCorrectionFactor();
     
-    std::cout << "\npixelMs" << msPerPixel << ", correction_factor: " << getCorrectionFactor(); 
+    std::cout << "\npixelMs: " << msPerPixel << ", correction_factor: " << getCorrectionFactor(); 
 
     size_t testSize = 32 * 1024 * 1024; // 32 MB
     unsigned char *d_bw, *h_bw = new unsigned char[testSize];

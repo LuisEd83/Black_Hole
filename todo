@@ -37,10 +37,12 @@ blackhole/
         ◦ medições de temperatura while(kernelActive)
         ◦ consertar dinâmica de updateCorrectionFactor no feedback.
             → porque não cria nem lê esse arquivo??    
+        ◦ zerar total na pra segunda chamada do kernel
 
     • Difíceis:
         ◦   fazer um control.hpp que defina funções de temperatura e temporização
             e re-introduzir em main.cpp e state_heatmap.hpp
+
 
 ━ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 → UI/UX:
@@ -80,12 +82,8 @@ blackhole/
 → CUDA:
     
     • General: 
-        ◦ ver spinlock em heatmap
         ◦ remover NONE do heatmap     
-        ◦ colocar is_sim na chamada do kernel > propaga para host, .cuh.
-            → isso para não printar debug/gráfico na chamada de warmup
 
-        ◦ ver cudaDeviceSynchro vs flagSet
 
     • Real time:    10s+ por frame é inviável para real time. 
                     O caminho para chegar a 30+ fps tem três etapas:

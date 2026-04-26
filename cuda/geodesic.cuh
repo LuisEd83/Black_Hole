@@ -1,5 +1,9 @@
 #pragma once
 
+
+#include "../src/state_heatmap.hpp"
+
+
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // geodesic.cuh
 // Header compartilhado entre geodesic.cu (NVCC) e geodesic_host.cpp (GCC).
@@ -65,9 +69,19 @@ __global__ void raytraceKernel( unsigned char* pixels,
                                 cudaTextureObject_t perlin
                                );
 
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// mais declarações de funções:
+
+
+void activateSetFlags();
+unsigned int* getStateCountsPtr();
+
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+
 extern __device__ cudaTextureObject_t starmap;
+extern __device__ cudaTextureObject_t perlin;
+
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

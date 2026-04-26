@@ -9,13 +9,41 @@
             2560 x 1440 [QHD],
             3840 x 2160 [UHD].
             4096x2048 [4K]
-    */
-  
+*/
+
+
+
+/*
+void getRes(std::string res){
+
+    Resolution result = fromString(res);
+
+    switch (result){
+        case Resolution::Minimal:       BH::WIDTH = 800;  BH::HEIGHT = 600;  break;
+        case Resolution::HD:            BH::WIDTH = 1280; BH::HEIGHT = 720;  break;
+        case Resolution::HDplus:        BH::WIDTH = 1600; BH::HEIGHT = 900;  break;
+        case Resolution::FHD:           BH::WIDTH = 1920; BH::HEIGHT = 1080; break;
+        case Resolution::QHD:           BH::WIDTH = 2560; BH::HEIGHT = 1440; break;
+        case Resolution::UHD:           BH::WIDTH = 3840; BH::HEIGHT = 2160; break;
+        case Resolution::_4K:           BH::WIDTH = 4096; BH::HEIGHT = 2048; break;
+
+        default:
+            std::cerr << "Resolução desconhecida: " << BH::result << "\n";
+            return 1;
+    }
+
+}
+*/
+
+
 namespace BH {
+    
     const bool is_sim = true;
-    const std::string res = "UHD";
-    constexpr int    MAX_STEPS       = 15000;
-    constexpr double STEP_FACTOR     = 0.01;
+
+    const std::string res = "Minimal";
+
+    constexpr int    MAX_STEPS       = 10000;
+    constexpr double STEP_FACTOR     = 0.50;
     constexpr double ADAPTIVE_FACTOR = 5.0;
     
     constexpr double factor = 5.0f;

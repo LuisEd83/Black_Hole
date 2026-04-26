@@ -1,11 +1,15 @@
 #include "../src/constants.hpp"
 #include "../src/state_heatmap.hpp"
 
+#include "comms.cuh"
 #include "geodesic.cuh"
 #include "feedbacks.cuh"
 
 #include <cmath>
 #include <iostream>
+
+
+extern __device__ unsigned int d_state_counts[SH_NUM_STATES];
 
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -71,6 +75,7 @@ __device__ void geodesicRHS(const Rays& s, double rhs[6], double rs) {
   média final: state += (dl/6) * (k1 + 2k2 + 2k3 + k4)
 
 */
+
 
 __device__ void rk4Step(Rays& s, double dl, double rs){
 
@@ -142,7 +147,8 @@ __device__ void rk4Step(Rays& s, double dl, double rs){
 
 __device__ float dopplerShift(double phi, double r_current, double3 camera_pos, double rs){
     
-    /*
+    /* 
+        info
             
         O disco gira em torno do buraco negro. O lado esquerdo (para um observador padrão)
         se aproxima da câmera — luz comprimida, mais azul, mais brilhante.
@@ -209,6 +215,8 @@ __device__ float perlinNoise(cudaTextureObject_t perlin,
 __device__ float redShift(double r_current, double rs){
         
     /*
+        info
+
         Um fóton emitido num raio r chega ao observador com a
         sua frequência reduzida por um fator z:
 
@@ -236,7 +244,8 @@ __device__ float diskEmissivity(double r_current, double z_cartesiano,
                                 double height_scale){
     
     /*
-    
+        info
+
         Antes estávamos usando uma detecção binária (if(y_prev * y_next < 0.0)). Esse efeito causa
         a perda de vários pontos que, na realidade assumem cores gradientes, mas são "colapsadas" pela
         detecção. Com o disco volumétrico, conseguimos pegar esse gradiente pela acumulação da emissividade da luz.
@@ -285,6 +294,8 @@ __device__ float diskEmissivity(double r_current, double z_cartesiano,
 __device__ void temperatureToColor(float t_normalized, float& disk_r, float& disk_g, float& disk_b){
     
     /*
+        info
+
         física: um disco de acreção tem temperatura T(r) ∝ r^{-3/4}. 
         A região interna (r ≈ 3rs) atinge ~10^7 K — emite em raios-X, 
         cor percebida azul-branco. A região externa (r ≈ 12rs) está em 
@@ -336,18 +347,12 @@ __device__ void temperatureToColor(float t_normalized, float& disk_r, float& dis
         disk_g = 0.05f + 0.25f * t;
         disk_b = 0.0f;;
     }
-    
-    
 
 }
 
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // raytraceKernel — kernel principal, um thread por pixel
-
-
-// necessário para computar as estruturas de print
-__device__ unsigned int d_state_counts[SH_NUM_STATES];
 
 
 __global__ void raytraceKernel( unsigned char* pixels,
@@ -368,7 +373,7 @@ __global__ void raytraceKernel( unsigned char* pixels,
     if (x >= WIDTH || y >= HEIGHT) return;
     
 
-    
+    //@{ 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // posição da câmera em cartesianos
 
@@ -473,13 +478,15 @@ __global__ void raytraceKernel( unsigned char* pixels,
     s.L = r0 * r0 * st_safe * s.dphi;
     s.E = f0 * vmag;
     
-
+    //@}
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // integração — loop principal do ray tracer
 
     
     /*
+        info
+
         step        —   tamanho de cada passo de integração em metros (rs * N). Menor = mais preciso, 
                         bordas do disco mais suaves, photon ring mais visível, render mais lento. 
                         Maior = mais rápido, mais aliasing, raios podem pular o horizonte. O passo adaptativo 
@@ -609,7 +616,6 @@ __global__ void raytraceKernel( unsigned char* pixels,
             B = (unsigned char)(fminf(color.z * 255.0f, 255.0f));
     
             result = RayResult::ESCAPE;
-            //SH_RECORD(d_state_counts, result); 
 
             break;
         }
@@ -641,7 +647,7 @@ __global__ void raytraceKernel( unsigned char* pixels,
         }
 
 
-        // ─────────────────────────────────────────────────────────────────────────────────────────────────
+        // debug ────────────────────────────────────────────────────────────────────────────────────────────
         /*
         if(x == WIDTH/2 && y == HEIGHT/2 && i < 5)
             printf("[debug] - step %d: r=%.3e  theta=%.4f  dr=%.3e  E=%.3e dr=%.3e  dtheta=%.3e  dphi=%.3e\n\n",
@@ -680,43 +686,18 @@ __global__ void raytraceKernel( unsigned char* pixels,
                 R = G = B = 0;
 
                 result = RayResult::HORIZON;
-                //SH_RECORD(d_state_counts, result); 
 
                 break;
             }
                     
-                            
-                // ─────────────────────────────────────────────────────────────────────────────────────────────────
-                /*
-                if(x == WIDTH/2 && y == HEIGHT/2)
-                    printf("[debug] - pos-step %d: s.r=%.3e  rs=%.3e  teste=%d\n",
-                       i, s.r, rs, (int)(s.r <= rs));
-                */    
-                // ─────────────────────────────────────────────────────────────────────────────────────────────────
-            
 
             y_next = s.r * cos(s.theta);
        
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-            
-            
-            // ─────────────────────────────────────────────────────────────────────────────────────────────────
-            /*
-            if(s.r <= rs || s.r <= 0.0) {
-                if (x == WIDTH/2 && y == HEIGHT/2)
-                    printf("[debug] - HORIZONTE DETECTADO no step %d: r/rs=%.4f\n", i, s.r/rs);
-                R = 0; G = 0; B = 0;
-
-                break;
-            }
-            */
-            // ─────────────────────────────────────────────────────────────────────────────────────────────────
-   
-
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         // ── disco  ─────────────────────────────────────────────
-        
+        //@{
+         
         
         /* classificador binário.
         
@@ -909,13 +890,7 @@ __global__ void raytraceKernel( unsigned char* pixels,
                 disk_b = disk_b + blend * (1.0f - disk_b);
 
             }
-            
 
-            // ─────────────────────────────────────────────────────────────────────────────────────────────────
-            //printf("perlin: %f, ",perlin_noise);
-            //printf("brightness: %f\n", base_brightness);
-            // ─────────────────────────────────────────────────────────────────────────────────────────────────
-           
 
             //float intensity = emissividade  * emission_scale * beam_effect;
             float intensity = emissividade * base_brightness * emission_scale * beam_effect;
@@ -931,13 +906,15 @@ __global__ void raytraceKernel( unsigned char* pixels,
             accum_alpha += contribution * remaining;
 
             result = RayResult::DISK;
-            //SH_RECORD(d_state_counts, result); 
 
             // disco completamente opaco → para de integrar
             if (accum_alpha >= 1.0f){
                 accum_alpha = 1.0f;
                 break;
             }
+
+        //@}
+
         }
 
         y_prev = y_next;
@@ -964,17 +941,9 @@ __global__ void raytraceKernel( unsigned char* pixels,
     if (result == RayResult::NONE){ 
 
         result = RayResult::FALLBACK;
-        //SH_RECORD(d_state_counts, result); 
 
     }
-        // ─────────────────────────────────────────────────────────────────────────────────────────────────
-        /*  
-        if(x == WIDTH/2 && y == HEIGHT/2)
-            printf("[debug] - MAX_STEPS atingido: r/rs=%.4f\n", s.r/rs);
-        */    
-        // ─────────────────────────────────────────────────────────────────────────────────────────────────
-
-
+       
         if(result == RayResult::HORIZON){
             R = G = B = 0;
 
@@ -1013,7 +982,7 @@ __global__ void raytraceKernel( unsigned char* pixels,
     pixels[idx+0] = R;
     pixels[idx+1] = G;
     pixels[idx+2] = B;
-
+    
     SH_RECORD(d_state_counts, result);
 
 
@@ -1034,43 +1003,32 @@ __global__ void raytraceKernel( unsigned char* pixels,
 
 #include <chrono>
 
-
 void launchRaytrace( unsigned char* pixels, 
                      int WIDTH, int HEIGHT,
                      double3 pos, double3 fwd, double3 right, double3 up,
                      float fov_y, double rs, cudaTextureObject_t starmap, cudaTextureObject_t perlin){
+        
 
-    
-        // ─────────────────────────────────────────────────────────────────────────────────────────────────
-        /*
-        */
-        static bool flagSet = false;
-        if (!flagSet) {
-            cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync);
-            flagSet = true;
-        }
-        // ─────────────────────────────────────────────────────────────────────────────────────────────────
-
-        // ─────────────────────────────────────────────────────────────────────────────────────────────────
-        /*
-        */
-        static double ms_per_frame = -1.0;
-        static auto   t_last       = std::chrono::high_resolution_clock::now();
-        if (ms_per_frame > 0.0) {
-        printf("ms_per_frame [1]: %f", ms_per_frame);
-            auto now     = std::chrono::high_resolution_clock::now();
-            double delta = std::chrono::duration<double, std::milli>(now - t_last).count();
-            // suaviza com média móvel exponencial — evita saltos por GC ou stall de driver
-            ms_per_frame = ms_per_frame * 0.9 + delta * 0.1;
-        }
-        t_last = std::chrono::high_resolution_clock::now();
-        // ─────────────────────────────────────────────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────────────────────────────
+    //@{
+    /*
+    printf("ms_per_frame [1]: %f", ms_per_frame);
+    */
+    static double ms_per_frame = -1.0;
+    static auto   t_last       = std::chrono::high_resolution_clock::now();
+    if (ms_per_frame > 0.0) {
+        auto now     = std::chrono::high_resolution_clock::now();
+        double delta = std::chrono::duration<double, std::milli>(now - t_last).count();
+        // suaviza com média móvel exponencial — evita saltos por GC ou stall de driver
+        ms_per_frame = ms_per_frame * 0.9 + delta * 0.1;
+    }
+    t_last = std::chrono::high_resolution_clock::now();
+    //@}
+    // ─────────────────────────────────────────────────────────────────────────────────────────────────
 
 
     size_t nbytes = WIDTH * HEIGHT * 3;
-
-    StateHeatmap state(WIDTH * HEIGHT, BH::is_sim);
-
+        
     unsigned char* d_pixels;
     cudaMalloc(&d_pixels, nbytes);
     cudaMemset(d_pixels, 0, nbytes);
@@ -1078,40 +1036,46 @@ void launchRaytrace( unsigned char* pixels,
 
     unsigned int* d_counts_ptr = nullptr;
     cudaGetSymbolAddress((void**)&d_counts_ptr, d_state_counts);
-    state.start(d_counts_ptr);
+    cudaMemset(d_counts_ptr, 0, SH_NUM_STATES * sizeof(unsigned int));
+
+
+    cudaStream_t kernel_stream;
+    cudaStreamCreate(&kernel_stream);
 
 
     dim3 blockSize(16, 16);
     dim3 numBlocks((WIDTH + 15)/16, (HEIGHT + 15)/16);
-
-    raytraceKernel<<<numBlocks, blockSize>>>(
+    
+    raytraceKernel<<<numBlocks, blockSize, 0, kernel_stream>>>(
         d_pixels, WIDTH, HEIGHT, pos, fwd, right, up, fov_y, rs, starmap, perlin
     );
 
-    //cudaDeviceSynchronize();
-    state.stop();
 
+    //cudaDeviceSynchronize();
+    cudaStreamSynchronize(kernel_stream); 
     cudaMemcpy(pixels, d_pixels, nbytes, cudaMemcpyDeviceToHost);
+       
+
+    // ─────────────────────────────────────────────────────────────────────────────────────────────────
+    //@{
+    /*
+    printf("ms_per_frame [2]: %f", ms_per_frame);
+    */
+    if (ms_per_frame < 0.0) {
+        auto now = std::chrono::high_resolution_clock::now();
+        ms_per_frame = std::chrono::duration<double, std::milli>(now - t_last).count();
+    }
+
+    static double dummy_extrapolado = -1.0;  // populado pelo warmup na primeira vez
+    if (ms_per_frame > 0.0 && dummy_extrapolado > 0.0){
+        updateCorrectionFactor(ms_per_frame, dummy_extrapolado);
+    }
+    //@}
+    // ─────────────────────────────────────────────────────────────────────────────────────────────────
     
 
-
-        // ─────────────────────────────────────────────────────────────────────────────────────────────────
-        /*
-        */
-        printf("ms_per_frame [2]: %f", ms_per_frame);
-        if (ms_per_frame < 0.0) {
-            auto now = std::chrono::high_resolution_clock::now();
-            ms_per_frame = std::chrono::duration<double, std::milli>(now - t_last).count();
-        }
-        static double dummy_extrapolado = -1.0;  // populado pelo warmup na primeira vez
-        if (ms_per_frame > 0.0 && dummy_extrapolado > 0.0){
-            updateCorrectionFactor(ms_per_frame, dummy_extrapolado);
-        }
-        // ─────────────────────────────────────────────────────────────────────────────────────────────────
-
-
     cudaFree(d_pixels);
-
+    cudaStreamDestroy(kernel_stream);  
 }
 
 
