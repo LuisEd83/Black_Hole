@@ -10,5 +10,5 @@ void warmupAndEstimate(int WIDTH, int HEIGHT, int maxSteps, double step, double 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // mais benchmarks 
 
-void updateCorrectionFactor(double real_ms, double dummy_ms);
+void updateCorrectionFactor(double real_ms);
 double getCorrectionFactor();

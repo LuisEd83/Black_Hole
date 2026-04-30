@@ -1,5 +1,6 @@
 #include "feedbacks.cuh"
 #include "geodesic.cuh"
+#include "../src/temp_and_time.hpp"
 
 #include <cuda_runtime.h>
 #include <iostream>
@@ -7,6 +8,9 @@
 #include <cmath>
 #include <chrono>
 #include <cstdio>
+#include <unistd.h>
+
+using Clock = std::chrono::high_resolution_clock;
 
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -25,16 +29,20 @@
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // funções de fator de correção:
+//@{
 
 
-static constexpr const char* FACTOR_FILE = ".bh_correction_factor";
+static constexpr const char* FACTOR_FILE = "cuda/.bh_correction_factor";
 static constexpr int FACTOR_WARMUP     = 5;   // ignora os N primeiros frames (GPU ainda aquecendo)
+static double dummy_ms = 0;
 
 
-void updateCorrectionFactor(double real_ms, double dummy_ms){
+void updateCorrectionFactor(double real_ms){
     if(dummy_ms <= 0.0) return;
+        
 
     double fator_novo = real_ms / dummy_ms;
+
 
     // lê média e contagem atuais do arquivo
     double media  = 1.25;
@@ -43,6 +51,8 @@ void updateCorrectionFactor(double real_ms, double dummy_ms){
     if(FILE* f = fopen(FACTOR_FILE, "r")){
         fscanf(f, "%lf %d", &media, &count);
         fclose(f);
+    } else {
+        printf("READ: fopen = %p, errno = %d (%s)\n", f, errno, strerror(errno));
     }
 
     if(count < FACTOR_WARMUP){
@@ -60,6 +70,8 @@ void updateCorrectionFactor(double real_ms, double dummy_ms){
     if(FILE* f = fopen(FACTOR_FILE, "w")){
         fprintf(f, "%.6f %d\n", media, count);
         fclose(f);
+    } else {
+        printf("WRITE: fopen = %p, errno = %d (%s)\n", f, errno, strerror(errno));
     }
 
 }
@@ -77,12 +89,12 @@ double getCorrectionFactor(){
 
     return media;
 }
-
+//@}
 
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // kernel e geodesic dummies
-
+//@{
 /*
     não faz nada útil. Serve só pra forçar o driver a inicializar o contexto
     CUDA antes da gente medir qualquer coisa de verdade
@@ -172,6 +184,7 @@ __global__ static void geodesicDummy(   unsigned char* pixels,
     pixels[idx+2] = 0;
 
 }
+//@}
 
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -181,9 +194,8 @@ void warmupAndEstimate(int WIDTH, int HEIGHT, int maxSteps, double step, double 
 
 
     using ms = std::chrono::duration<double, std::milli>;
-    auto now = []{ return std::chrono::high_resolution_clock::now(); };
+    auto now = []{ return Clock::now(); };
     
-
 
     // ── 1. Info do device ────────────────────────────────────────────────────
     std::cout << "\n    ◦ detectando device CUDA...\n" << "      │\n";
@@ -193,8 +205,8 @@ void warmupAndEstimate(int WIDTH, int HEIGHT, int maxSteps, double step, double 
     cudaDeviceProp prop;
     CUDA_CHECK(cudaGetDeviceProperties(&prop, deviceId));
 
-    std::cout << "      ├ GPU:          " << prop.name << "\n";
-    std::cout << "      ├ VRAM:         " << prop.totalGlobalMem / (1024*1024) << " MB\n";
+    std::cout << "      ├ GPU: " << prop.name << "\n";
+    std::cout << "      ├ VRAM: " << prop.totalGlobalMem / (1024*1024) << " MB\n";
     std::cout << "      └ max threads/bloco: " << prop.maxThreadsPerBlock << "\n\n";
     
 
@@ -221,7 +233,7 @@ void warmupAndEstimate(int WIDTH, int HEIGHT, int maxSteps, double step, double 
 
     // ── 3. Kernel dummy — acorda o driver ────────────────────────────────────
     std::cout << "    ◦ acordando driver CUDA (dummy kernel)...\n" << "      │\n";
-    std::cout << "      ├ ·≈300ms: primeira chamada CUDA inicializa o contexto\n";
+    std::cout << "      ├ ≈300ms: primeira chamada CUDA inicializa o contexto\n";
 
     int* d_dummy;
     CUDA_CHECK(cudaMalloc(&d_dummy, sizeof(int)));
@@ -276,6 +288,8 @@ void warmupAndEstimate(int WIDTH, int HEIGHT, int maxSteps, double step, double 
     
     double benchMs = totalBenchMs / BENCH_RUNS;
     CUDA_CHECK(cudaFree(d_bench));
+    
+    dummy_ms = benchMs;
 
     // Tempo por pixel no benchmark
     double msPerPixel = benchMs / (BW * BH);
@@ -289,14 +303,16 @@ void warmupAndEstimate(int WIDTH, int HEIGHT, int maxSteps, double step, double 
     // ── 5. Estimativa extrapolada ─────────────────────────────────────────────
     double estKernelMs = msPerPixel * WIDTH * HEIGHT* getCorrectionFactor();
     
-    std::cout << "\npixelMs: " << msPerPixel << ", correction_factor: " << getCorrectionFactor(); 
-
     size_t testSize = 32 * 1024 * 1024; // 32 MB
+    
     unsigned char *d_bw, *h_bw = new unsigned char[testSize];
     cudaMalloc(&d_bw, testSize);
+    
     auto tbw0 = now();
     cudaMemcpy(h_bw, d_bw, testSize, cudaMemcpyDeviceToHost);
+    
     double estMemcpyMs = ms(now() - tbw0).count() * ((double)realBufferSize / testSize);
+    
     cudaFree(d_bw);
     delete[] h_bw;
 
@@ -319,26 +335,12 @@ void warmupAndEstimate(int WIDTH, int HEIGHT, int maxSteps, double step, double 
     std::cout << "        ├ FPS esperado:     " << std::setw(8) << std::fixed << std::setprecision(1) << estFps        << " fps\n";
         
     
-    auto now_      = std::chrono::system_clock::now();
+    auto now_      = Clock::now();
     std::time_t t_ = std::chrono::system_clock::to_time_t(now_);
 
     int extra_seconds = (int)(estTotalMs/ 1000.0);
 
-    std::time_t t_done = t_ + extra_seconds;
-
-    // copia a struct antes da segunda chamada sobrescrever
-    std::tm tm_done = *std::localtime(&t_done);   // copia por valor
-    std::tm tm_now  = *std::localtime(&t_);       // agora pode chamar de novo
-
-    std::cout << "        └ Conclusão (benchmark): ~"
-              << std::setfill('0') << std::setw(2) << tm_done.tm_hour << ":"
-              << std::setw(2) << tm_done.tm_min  << ":"
-              << std::setw(2) << tm_done.tm_sec
-              << " [Agora: "
-              << tm_now.tm_hour << ":"
-              << std::setw(2) << tm_now.tm_min  << ":"
-              << std::setw(2) << tm_now.tm_sec
-              << "]\n";
+    std::cout << "        └ Conclusão: ~" << estimatedEnd(Clock::now(), extra_seconds) << "  [Agora: " << printNow() << "]\n\n";
 
     /*
     if (estFps < 1.0){

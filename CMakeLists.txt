@@ -34,6 +34,7 @@ add_executable(BlackHoleCUDA
     cuda/geodesic.cu
     cuda/comms.cu
     cuda/feedbacks.cu
+    src/temp_and_time.cpp
     src/lodepng.cpp
     src/starmap.cpp
     src/perlin.cpp

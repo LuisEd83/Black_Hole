@@ -25,7 +25,7 @@
 
 inline const double rs_local = 2.0 * G * BH_MASS / (c * c);
 
-void launchRaytrace( unsigned char* pixels, int WIDTH, int HEIGHT,
+void launchRaytrace( bool is_gl, void* pixels, int WIDTH, int HEIGHT,
                      double3 pos, double3 fwd, double3 right, double3 up,
                      float fov_y, double rs_local, cudaTextureObject_t starmap, cudaTextureObject_t perlin);
 
@@ -33,7 +33,7 @@ void launchRaytrace( unsigned char* pixels, int WIDTH, int HEIGHT,
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 
-void raytraceCUDA( unsigned char* pixels,
+void raytraceCUDA( bool is_gl, void* pixels,
                    int WIDTH, int HEIGHT,
                    glm::vec3 pos, glm::vec3 fwd, glm::vec3 right, glm::vec3 up,
                    float fov_y){
@@ -44,7 +44,7 @@ void raytraceCUDA( unsigned char* pixels,
     double3 c_right = { right.x, right.y, right.z };
     double3 c_up    = { up.x,    up.y,    up.z    };
 
-    launchRaytrace(pixels, WIDTH, HEIGHT, c_pos, c_fwd, c_right, c_up, fov_y, rs_local, starmap, perlin);
+    launchRaytrace(is_gl, pixels, WIDTH, HEIGHT, c_pos, c_fwd, c_right, c_up, fov_y, rs_local, starmap, perlin);
 
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess)

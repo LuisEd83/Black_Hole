@@ -1,8 +1,6 @@
 #pragma once
 
 
-#include "../src/state_heatmap.hpp"
-
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // geodesic.cuh
@@ -57,7 +55,7 @@ struct Rays {
 // declaração do kernel — definido em geodesic.cu, lançado em geodesic_host.cpp
 
 
-__global__ void raytraceKernel( unsigned char* pixels,
+__global__ void raytraceKernel( bool is_gl, unsigned char* pixels,
                                 int WIDTH, int HEIGHT,
                                 double3 cam_position,
                                 double3 cam_fwd,

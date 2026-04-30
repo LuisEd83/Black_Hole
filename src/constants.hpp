@@ -1,3 +1,5 @@
+#pragma once
+
 #include <string>
   
 /*
@@ -39,16 +41,27 @@ void getRes(std::string res){
 namespace BH {
     
     const bool is_sim = true;
+    const bool is_gl = true;
 
     const std::string res = "Minimal";
 
-    constexpr int    MAX_STEPS       = 10000;
-    constexpr double STEP_FACTOR     = 0.50;
+    constexpr int    MAX_STEPS       = 5000;
+    constexpr double STEP_FACTOR     = 0.5;
+    
+    constexpr double IMPACT_CUTOFF  = 7.5;
+    constexpr double MAX_STEPS_DIV  = 2.5;
+
     constexpr double ADAPTIVE_FACTOR = 5.0;
+    constexpr double EMISSIVITY_RATE = 0.001;
+
+    constexpr double factor = 8.0f;
     
-    constexpr double factor = 5.0f;
-    constexpr double tame = 0.125f;
-    
+    constexpr double X_COEF = 1.2f;
+    constexpr double Y_COEF = 0.6f;
+    constexpr double Z_COEF = 0.12f;
+
+
+
     /*
     constexpr double ADAPTIVE_CLAMP  = 0.001;
     constexpr double ESCAPE_FACTOR   = 300.0;

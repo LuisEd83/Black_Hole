@@ -1,8 +1,8 @@
 #include "engine.hpp"
+#include "constants.hpp"
  
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
-#include <chrono>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
  
@@ -12,7 +12,10 @@
 #include <string>
 #include <fstream>
 #include <sstream>
+#include <chrono>
 
+#include <cuda_runtime.h>
+#include <cuda_gl_interop.h>
 
 using namespace std;
 using namespace glm;
@@ -42,11 +45,10 @@ using namespace glm;
 
 */
 
-
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // declaração evitar dependência circular de .hpp
 
-void raytraceCUDA(unsigned char* pixels,
+void raytraceCUDA(bool is_sim, void* pixels,
                   int WIDTH, 
                   int HEIGHT,
                   vec3 pos, vec3 fwd, vec3 right, vec3 up,
@@ -57,6 +59,7 @@ void raytraceCUDA(unsigned char* pixels,
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+static cudaGraphicsResource_t cuda_tex_resource = nullptr;
 
 static string loadShaders(const string& path){
     
@@ -115,11 +118,13 @@ static GLuint buildProgram(const char* vert, const char* frag){
     */
 
     GLuint vertex   = compileShaders(GL_VERTEX_SHADER, vert);
-    GLuint fragments= compileShaders(GL_VERTEX_SHADER, vert);
+    GLuint fragments= compileShaders(GL_FRAGMENT_SHADER, frag);
     
     GLuint program = glCreateProgram();
     glAttachShader(program, vertex);
     glAttachShader(program, fragments);
+    glLinkProgram(program);
+     
 
     GLint ok;
     glGetProgramiv(program, GL_LINK_STATUS, &ok);
@@ -159,7 +164,7 @@ static GLuint makeGLFrameTexture(int WIDTH, int HEIGHT){
     GLuint texture;
     glGenTextures(1, &texture);
     glBindTexture(GL_TEXTURE_2D, texture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, WIDTH, HEIGHT, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, WIDTH, HEIGHT, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
@@ -192,7 +197,7 @@ static void cursorPos(GLFWwindow* window, double x, double y){
     
     */
 
-    const float sensitivity = 0.005f;
+    const float sensitivity = 10e-10f;
 
     if(!camera.dragging){
         
@@ -209,13 +214,13 @@ static void cursorPos(GLFWwindow* window, double x, double y){
     camera.last_mouse_y = y;
     
 
-    camera.azimuth_angle += dx * sensitivity;
-    camera.elevation_angle += dy * sensitivity;
+    camera.azimuth += dx * sensitivity;
+    camera.elevation += dy * sensitivity;
     
     // apenas uma garantia para a câmera não poder virar de cabeça pra baixo
     const float limit = radians(89.0f);
-    if(camera.elevation_angle > limit) camera.elevation_angle = limit;
-    if(camera.elevation_angle < -limit) camera.elevation_angle = -limit;
+    if(camera.elevation > limit) camera.elevation = limit;
+    if(camera.elevation < -limit) camera.elevation = -limit;
     
 
     camera.will_rerender = true;
@@ -269,8 +274,8 @@ void engineRun(const EngineConfig& config){
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // passo 1: iniciar GLFW
+    glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_X11);
     
-
     if(!glfwInit()){
         cerr << "[ENGINE]: Falha ao iniciar GLFW.\n";
         return;
@@ -291,7 +296,7 @@ void engineRun(const EngineConfig& config){
     }
 
     glfwMakeContextCurrent(window);
-    glfwSwapInterval(1); 
+    glfwSwapInterval(0); 
 
     
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -329,8 +334,8 @@ void engineRun(const EngineConfig& config){
     camera.orbital_radius = length(config.cam_pos - config.cam_target);
     
     vec3 dir = normalize(config.cam_pos - config.cam_target);
-    camera.elevation_angle = asin(dir.y);
-    camera.azimuth_angle = atan2(dir.z, dir.x);
+    camera.elevation = asin(dir.z);
+    camera.azimuth = atan2(dir.y, dir.x);
     camera.will_rerender = true;
 
 
@@ -342,16 +347,20 @@ void engineRun(const EngineConfig& config){
     string frag = loadShaders("shaders/display.frag");
     const char* vert_str = vert.c_str();
     const char* frag_str = frag.c_str();
-
+    
     GLuint program  = buildProgram(vert_str, frag_str);
     GLuint textures = makeGLFrameTexture(config.WIDTH,  config.HEIGHT);
     
+    cudaGraphicsGLRegisterImage(&cuda_tex_resource, textures,
+                             GL_TEXTURE_2D,
+                             cudaGraphicsRegisterFlagsSurfaceLoadStore);
+
     // criaçao do VAO vazio
     GLuint VAO;
     glGenVertexArrays(1, &VAO);
     
     glUseProgram(program);
-    glUniform1d(glGetUniformLocation(program, "u_frame"), 0); 
+    glUniform1i(glGetUniformLocation(program, "u_frame"), 0); 
     // textura unit 0. funciona como um índice, você pode armazenar várias texturas.
     // nesse caso, temos apenas uma, logo índice = 0. 
     
@@ -361,7 +370,7 @@ void engineRun(const EngineConfig& config){
 
 
     vector<unsigned char>pixels;
-    pixels.reserve(config.WIDTH * config.HEIGHT * 3); // 3 canais de RGB
+    pixels.resize(config.WIDTH * config.HEIGHT * 3); // 3 canais de RGB
     
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -378,17 +387,53 @@ void engineRun(const EngineConfig& config){
         glfwPollEvents();
         
         // relança kernel se deu will_rerender
+                    
         if(camera.will_rerender){
-            
-            vec3 pos, fwd, right, up;
-            camera.getVectors(pos, fwd, right, up);
-                
 
-            std::vector<unsigned char> pixels(config.WIDTH * config.HEIGHT * 3);
-            raytraceCUDA(pixels.data(), 
-                         config.WIDTH, config.HEIGHT, 
+            vec3 pos, fwd, right, up;
+
+           /*if(config.use_direct_vectors && frame_count == 0){
+
+                pos   = config.cam_pos;
+                fwd   = config.cam_fwd;
+                right = config.cam_right;
+                up    = config.cam_up_vec;
+
+            } else {
+            }
+            */
+
+            camera.getVectors(pos, fwd, right, up);
+
+            // mapeia textura GL para CUDA
+            cudaGraphicsMapResources(1, &cuda_tex_resource, 0);
+            
+            cudaArray_t cuda_array;
+            cudaGraphicsSubResourceGetMappedArray(&cuda_array, cuda_tex_resource, 0, 0);
+
+
+            // step 2: de WIDTH, HEIGHT, render em menor res: rW, rH
+            // passa o array para raytraceCUDA — kernel escreve direto
+            raytraceCUDA(BH::is_gl, cuda_array,
+                         config.WIDTH, config.HEIGHT,
                          pos, fwd, right, up,
                          config.fov_y);
+
+            // desmapeia antes do GL desenhar
+            cudaGraphicsUnmapResources(1, &cuda_tex_resource, 0);
+
+            // sem glTexSubImage2D — kernel já escreveu na textura
+            camera.will_rerender = false;
+        }
+
+            /*
+        std::vector<unsigned char> pixels(config.WIDTH * config.HEIGHT * 3);
+        raytraceCUDA(BH::is_gl, pixels.data(), 
+                     config.WIDTH, config.HEIGHT, 
+                     pos, fwd, right, up,
+                     config.fov_y);
+
+            
 
             glBindTexture(GL_TEXTURE_2D, textures);
             glTexSubImage2D(GL_TEXTURE_2D, 0,
@@ -399,8 +444,7 @@ void engineRun(const EngineConfig& config){
             glBindTexture(GL_TEXTURE_2D, 0);
 
             camera.will_rerender = false;
-
-        }
+            */
         
         glClear(GL_COLOR_BUFFER_BIT);
         glUseProgram(program);
@@ -420,6 +464,8 @@ void engineRun(const EngineConfig& config){
             float fps = frame_count / elapsed_time;
             string title = config.title + "  |  " + to_string(int(fps)) + " fps";
             glfwSetWindowTitle(window, title.c_str());
+        
+            std::cout << "fps:" << fps << "\n";
 
             frame_count = 0;
             then = now;

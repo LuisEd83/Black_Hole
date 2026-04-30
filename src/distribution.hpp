@@ -57,6 +57,7 @@
 
 
 
+#include "temp_and_time.hpp"
 #include <cstddef>
 #include <cstdio>
 #include <cstring>
@@ -66,6 +67,7 @@
 
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//@{
 
 
 #define SH_NUM_STATES 5
@@ -98,9 +100,6 @@ static const char* SH_STATE_COLORS[SH_NUM_STATES] = {
     atomicAdd(&(counter_array)[static_cast<int>(ray_result)], 1u); \
 
 
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-
 typedef struct {
 
     bool verbose;
@@ -112,6 +111,8 @@ typedef struct {
     pthread_mutex_t mutex;
 
 } SH_State;
+
+//@}
 
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -127,7 +128,7 @@ static void sh_draw(unsigned int* h, unsigned int total) {
     /* move cursor up SH_NUM_STATES+2 lines to redraw in place */
     static int first_draw = 1;
     if (!first_draw)
-        fprintf(stderr, "\033[%dA", SH_NUM_STATES + 2);
+        fprintf(stderr, "\033[%dA", SH_NUM_STATES + 3);
     
     first_draw = 0;
 
@@ -156,13 +157,16 @@ static void sh_draw(unsigned int* h, unsigned int total) {
         for (int j = 0; j < empty;  j++) 
             strcat(bar_empty,  "░");
 
+
         fprintf(stderr, "    %s%-8s%s  %s%s%s%s%s%s  %u\n",
                SH_STATE_COLORS[i], SH_STATE_NAMES[i], SH_RESET,
                SH_STATE_COLORS[i], bar_filled, SH_RESET,
                SH_DIM,             bar_empty,  SH_RESET,
                h[i]);
+
     }
 
+    fprintf(stderr, SH_BOLD "    Temp. GPU: %.1f°C\n" SH_RESET, getGpuTemp());
     fflush(stdout);
 }
 
@@ -242,6 +246,7 @@ class StateHeatmap {
         }
 
         void start(unsigned int* d_counts){
+            
 
             sh_.d_counts = d_counts;
             cudaMemset(d_counts, 0, SH_NUM_STATES * sizeof(unsigned int));
@@ -253,6 +258,7 @@ class StateHeatmap {
         }
         
         void stop(){
+                
             if (!sh_.verbose) return; 
 
             sh_.running = 0;

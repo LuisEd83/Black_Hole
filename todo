@@ -1,4 +1,6 @@
-━ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+→ pro README
+
 cmake -B build -S . && cmake --build build --clean-first && ./build/BlackHoleCUDA
 
 blackhole/
@@ -26,39 +28,40 @@ blackhole/
     └── requirements.txt
    
 
-━ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 → Misc:
 
     • Fáceis:
         ◦ README!!!
         ◦ refazer a distribuição espacial de pixels
+        ◦ rename StateHeatmap para distribution
 
      • Médias:
-        ◦ medições de temperatura while(kernelActive)
-        ◦ consertar dinâmica de updateCorrectionFactor no feedback.
-            → porque não cria nem lê esse arquivo??    
-        ◦ zerar total na pra segunda chamada do kernel
+        ◦ medições de temperatura while(kernelActive):
+            → introduzir funções de temperatura em state_heatmap.hpp
+        ◦ descobrir porque DISK não está sendo considerado: problema no local da atribuição ou ESCAPE roubando casos.
 
     • Difíceis:
-        ◦   fazer um control.hpp que defina funções de temperatura e temporização
-            e re-introduzir em main.cpp e state_heatmap.hpp
+        ◦ repetir starmap para evitar pitch blacks no opengl
+            → talvez seja só um problema de vetores
 
 
-━ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 → UI/UX:
     
     • General: 
         ◦ Colocar Δ de elapsed vs real
+        ◦   fix elapsed do benchmark, mal tunado, tem que pegar step_factor e res.
 
     • Concept:
         ◦ Eu quero poder VOAR pela simulação.
 
 
-━ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 → Rendering:
     
     • General:
-        ◦ fazer um modo heatmap só para ver o comportamento
+        ◦ fazer um mapa de calor só para ver o comportamento
 
 
     • Efeitos:
@@ -69,16 +72,58 @@ blackhole/
         ◦ Bloom/glow —  pós-processamento no host: pixels muito brilhantes do disco sangram luz para os vizinhos. Feito com convolução gaussiana no 
                         buffer de pixels antes de salvar o PNG.
         
-         ◦ exploração real das bordas da sombra e dos polos do disco
+        ◦ exploração real das bordas da sombra e dos polos do disco
     
+    • Real Time:
 
-━ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        ◦ Reprojection / Frame Extrapolation
+            →   When the camera moves slightly, instead of re-rendering from scratch, reproject the previous frame's 
+                pixels to the new camera position. Only re-trace pixels that don't reproject cleanly (the photon ring edge, disk boundary). 
+                This is exactly what DLSS Frame Generation and AMD FSR3 do. For small mouse movements you'd get the new frame almost for free.
+
+        ◦ TAA (Temporal Anti-Aliasing)
+            →   Each frame, jitter the ray by a sub-pixel Halton sequence offset. Blend with previous frame at ~0.1 weight. 
+                Over 8-10 frames the image converges to clean supersampled quality. Your will_rerender flag already gives you the reset signal — 
+                when camera moves, clear the accumulation buffer. Free SSAA over time with zero per-frame cost.
+
+        ◦ Checkerboard Rendering
+            →   Render only odd pixels on odd frames, even pixels on even frames. Reconstruct missing pixels from neighbors. Halves your pixel 
+                count per frame. PS4 Pro used this extensively for "4K" output. Easy to implement — just skip pixels where (x + y + frame_count) % 2 != 0 
+                and fill from previous frame.
+
+        ◦ Hierarchical Z / Early Depth Rejection
+            →   For your case: divide the screen into tiles (e.g. 32x32). Compute the impact parameter range for the tile's corner rays. 
+                If the entire tile's b_min > b_crit * 5, skip the whole tile to starmap without per-pixel integration. Amortizes the b calculation across 
+                many pixels.
+
+        ◦ Persistent Threads / Work Queue
+            →   Instead of one thread per pixel with wildly variable work (some pixels do 50 steps, photon ring pixels do 10000), use a work queue where 
+                threads grab the next unfinished pixel. Eliminates warp divergence where fast threads sit idle waiting for the slow photon ring threads in 
+                the same warp. This is called "persistent kernels" in CUDA.
+
+        ◦ LOD (Level of Detail) for the Disk
+            →   Far from the disk boundary, use fewer integration steps and a simpler emissivity model. Only near the photon ring and disk edge do you need 
+                full precision. Games do this with mip maps and LOD bias — your equivalent is a coarser step for rays with r > disk_r2 * 2.
+
+        ◦ DLSS / FSR (Upscaling)
+            →   Render at half resolution, upscale with a spatial filter. FSR1 is just a spatial sharpening filter — trivial to implement as a 
+                GLSL post-process pass. Render at 400x300, display at 800x600. Combined with your Etapa 2 adaptive resolution this gives you interactive 
+                framerates at acceptable quality.
+        
+        ◦ The highest impact ones for your specific bottleneck, in order: 
+            
+            persistent threads (fixes warp divergence from photon ring rays), 
+                TAA (free quality), 
+                    checkerboard (half the work), 
+                        tile early exit (extends your impact parameter optimization to whole tiles).
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 → Câmera:
     
     • ver se da pra andar (WASD)
 
 
-━ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 → CUDA:
     
     • General: 
@@ -88,29 +133,20 @@ blackhole/
     • Real time:    10s+ por frame é inviável para real time. 
                     O caminho para chegar a 30+ fps tem três etapas:
 
-        ◦ Etapa 1 — reduzir trabalho por pixel. O gargalo atual é que raios na fotosfera fazem milhares de steps. 
-                    Com o passo adaptativo bem calibrado e um early exit agressivo para raios que claramente escapam, 
-                    você pode chegar a ~500ms por frame.
-                        
         ◦ Etapa 2 — resolução adaptativa. Renderiza em 480×270 (16x menos pixels) para movimentação de câmera e resolução 
                     completa só quando a câmera para. Isso é o que o cam.moving do kavan fazia com os 200×150 pixels — 
                     exatamente essa ideia. Com 16x menos pixels, 500ms vira ~30ms.
-
-        ◦ Etapa 3 — CUDA-GL interop. Atualmente o pipeline é kernel → cudaMemcpy para host → glTexSubImage2D para GPU. 
-                    Isso copia os pixels duas vezes entre CPU e GPU desnecessariamente. Com cudaGraphicsGLRegisterImage o kernel 
-                    escreve diretamente na textura OpenGL sem passar pelo host. Para frames pequenos o ganho é modesto, mas para 1080p 
-                    é significativo.
-
+      
         ◦   A combinação das três etapas deve chegar a 30fps em resolução baixa e alguns segundos por frame em resolução alta — 
             similar ao comportamento do Interstellar game engine onde você move em baixa res e a imagem "resolve" quando para.
 
 
-━ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 → Resultados e Discussão:
     
     • começar processo com nvprof e artigo
     • descrever os segmentos retos
 
-━ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 

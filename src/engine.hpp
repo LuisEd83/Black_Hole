@@ -1,6 +1,8 @@
 #pragma once
 #ifndef engine_h
 
+#include "../cuda/geodesic.cuh"
+#include "constants.hpp"
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 /* 
@@ -15,7 +17,8 @@
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
- 
+
+#include "constants.hpp"
 #include <string>
 
 using namespace std;
@@ -28,15 +31,21 @@ using namespace glm;
 
 struct EngineConfig{
 
-    int WIDTH       = 800;
-    int HEIGHT      = 600;
-    string title    = "BlackHole Sim";
-    float fov_y     = 60.0f;    // campo de visão vertical, graus
+    int WIDTH = 0;
+    int HEIGHT = 0;
+    string title = "BlackHole Sim";
+    float fov_y = 60.0f;    // campo de visão vertical, graus
  
     // posição e orientação inicial da câmera (coordenadas cartesianas)
-    vec3  cam_pos     = vec3(0.0f, 0.0f, 50.0f);
-    vec3  cam_target  = vec3(0.0f, 0.0f,  0.0f);
-    vec3  cam_up      = vec3(0.0f, 1.0f,  0.0f);
+    vec3 cam_pos    = vec3(0.0f, 0.0f, 0.0f);
+    vec3 cam_target = vec3(0.0f, 0.0f, 0.0f);
+    vec3 cam_up     = vec3(0.0f, 0.0f, 1.0f);
+
+    bool use_direct_vectors = false;
+    vec3 cam_fwd = vec3(0.0f);
+    vec3 cam_right = vec3(0.0f);
+    vec3 cam_up_vec = vec3(0.0f);
+
 };
 
 
@@ -46,32 +55,38 @@ struct EngineConfig{
 
 struct CameraState{
     
-    vec3 target = vec3(0.f);                // ponto no qual a câmera dista 'orbital_radius'
-    vec3 world_up = vec3(0.f, 1.f, 0.f);    
+    vec3 target = vec3(0.f, 0.f, 0.f);                // ponto no qual a câmera dista 'orbital_radius'
+    vec3 world_up = vec3(0.f, 0.f, 1.f);    
+        
+    const double graus = 10.0f;
+    const double elevation_angle = 5.0f;
+
+    float elevation = glm::radians((float)graus);
+    float azimuth  = glm::radians((float)elevation_angle); 
+   
+    float orbital_radius = RS * BH::factor;   // distância ao target
  
-    float azimuth_angle   = 0.f;    // radianos — rotação horizontal
-    float elevation_angle = 0.f;    // radianos — rotação vertical
-    float orbital_radius  = 50.f;   // distância ao target
- 
-    bool dragging        = false;
-    double last_mouse_x  = 0.0;
-    double last_mouse_y  = 0.0;
-    bool will_rerender      = true;    // true → kernel precisa ser relançado
+    bool dragging = false;
+    double last_mouse_x = 0.0;
+    double last_mouse_y = 0.0;
+    bool will_rerender = true;    // true → kernel precisa ser relançado
     
     
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // função que retorna os valores atuais a partir dos ângulos
 
 
-    void getVectors(vec3 out_pos, vec3 out_fwd, vec3 out_right,vec3 out_up){
+    void getVectors(vec3& out_pos, vec3& out_fwd, vec3& out_right, vec3& out_up){
 
-
-        float cos_az = cos(azimuth_angle), sen_az = sin(azimuth_angle);
-        float cos_el = cos(elevation_angle), sen_el = sin(elevation_angle);
-        
-        out_pos = normalize(target - out_pos);
-        out_pos = normalize(cross(out_fwd, out_pos));
-        out_pos = normalize(cross(out_right, out_pos));
+        out_pos = glm::vec3(
+            float(orbital_radius) * BH::X_COEF,
+            float(orbital_radius)  * BH::Y_COEF,
+            float(orbital_radius)  * BH::Z_COEF
+        );
+      
+        out_fwd   = normalize(target - out_pos);
+        out_right = normalize(cross(out_fwd, world_up));
+        out_up    = normalize(cross(out_right, out_fwd));
     } 
 
 };
