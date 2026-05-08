@@ -18,6 +18,10 @@ static cudaArray_t starmap_array = nullptr;
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+cudaTextureObject_t starmapGet(){
+    return starmap;
+}
+
 
 bool starmapLoad(const char* path){
 

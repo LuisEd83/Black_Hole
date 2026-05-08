@@ -1,17 +1,14 @@
 #include "../src/constants.hpp"
-#include "../src/temp_and_time.hpp"
 #include "../src/distribution.hpp"
 
-#include "comms.cuh"
-#include "geodesic.cuh"
-#include "feedbacks.cuh"
+#include "headers/geodesic.cuh"
+#include "headers/feedbacks.cuh"
 
+#include <cuda_runtime.h>
 #include <cmath>
-#include <iostream>
-#include <unistd.h>
-
 
 extern __device__ unsigned int d_state_counts[SH_NUM_STATES];
+
 
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -27,7 +24,7 @@ extern __device__ unsigned int d_state_counts[SH_NUM_STATES];
 //@{
 
 
-__device__ void geodesicRHS(const Rays& s, double rhs[6], double rs) {
+__device__  void geodesicRHS(const Rays& s, double rhs[6], double rs) {
 
     // f = 1 - r_s/r  — fator de Schwarzschild.
     // Quando r >> r_s, f ≈ 1 (espaço plano). Em r = r_s, f = 0 (horizonte).
@@ -82,7 +79,7 @@ __device__ void geodesicRHS(const Rays& s, double rhs[6], double rs) {
 //@{
 
 
-__device__ void rk4Step(Rays& s, double dl, double rs){
+__device__   void rk4Step(Rays& s, double dl, double rs){
 
     double y0[6] = { s.r, s.theta, s.phi, s.dr, s.dtheta, s.dphi };
     double k1[6], k2[6], k3[6], k4[6], tmp[6];
@@ -152,7 +149,7 @@ __device__ void rk4Step(Rays& s, double dl, double rs){
 //@{
 
 
-__device__ float dopplerShift(double phi, double r_current, double3 camera_pos, double rs){
+__device__  float dopplerShift(double phi, double r_current, double3 camera_pos, double rs){
     
     /* 
         info
@@ -203,7 +200,7 @@ __device__ float dopplerShift(double phi, double r_current, double3 camera_pos, 
 }
 
 
-__device__ float perlinNoise(cudaTextureObject_t perlin, 
+__device__   float perlinNoise(cudaTextureObject_t perlin, 
                              double r_current, double phi,
                              double disk_r1, double disk_r2){
 
@@ -219,7 +216,7 @@ __device__ float perlinNoise(cudaTextureObject_t perlin,
 }
 
 
-__device__ float redShift(double r_current, double rs){
+__device__   float redShift(double r_current, double rs){
         
     /*
         info
@@ -246,7 +243,7 @@ __device__ float redShift(double r_current, double rs){
 }
 
 
-__device__ float diskEmissivity(double r_current, double z_cartesiano,
+__device__   float diskEmissivity(double r_current, double z_cartesiano,
                                 double disk_r1, double disk_r2,
                                 double height_scale){
     
@@ -291,14 +288,16 @@ __device__ float diskEmissivity(double r_current, double z_cartesiano,
     // perfil radial de temperatura — disco interno mais quente
     // T ∝ r^(-3/4) é a lei de Stefan-Boltzmann para disco de acreção
     double t_normalized = (r_current - disk_r1) / (disk_r2 - disk_r1);  // [0,1]
-    double temp_profile = pow(1.0 - t_normalized * 0.8, 0.75);       // mais brilhante interno
-    
+    //double temp_profile = pow(1.0 - t_normalized * 0.8, 0.75);       // mais brilhante interno
+    double base = 1.0 - t_normalized * 0.8;
+    double temp_profile = sqrt(base) * sqrt(sqrt(base));
+
     return (float)(gaussian * temp_profile);
 
 }
 
 
-__device__ void temperatureToColor(float t_normalized, float& disk_r, float& disk_g, float& disk_b){
+__device__   void temperatureToColor(float t_normalized, float& disk_r, float& disk_g, float& disk_b){
     
     /*
         info
@@ -364,55 +363,23 @@ __device__ void temperatureToColor(float t_normalized, float& disk_r, float& dis
 //@{
 
 
-__global__ void raytraceKernel( unsigned char* pixels,
-                                bool is_gl,
-                                int WIDTH, int HEIGHT,
-                                double3 cam_position,
-                                double3 cam_fwd,
-                                double3 cam_right,
-                                double3 cam_up,
-                                float fov_y,
-                                double rs,
-                                cudaTextureObject_t starmap,
-                                cudaTextureObject_t perlin,
-                                cudaSurfaceObject_t surface,
-                                int* d_counter 
-                                ){
-    int x = 0 , y = 0;
-    int is_persis = 1;    
-
-    if(is_gl){
-        
-        if(is_persis){
-            while(1){
-                int idx = atomicAdd(d_counter, 1); 
+__device__  void pixelProcess(   int x, 
+                                                int y,
+                                                unsigned char &R, 
+                                                unsigned char &G, 
+                                                unsigned char &B, 
+                                                int WIDTH, int HEIGHT,
+                                                double3 pos,
+                                                double3 fwd,
+                                                double3 right,
+                                                double3 up,
+                                                float fov_y,
+                                                double rs,
+                                                cudaTextureObject_t starmap,
+                                                cudaTextureObject_t perlin,
+                                                RayResult& result
+                                            ){
             
-                x = idx % WIDTH;
-                y = idx / WIDTH;
-                if(idx >= WIDTH * HEIGHT) return;
-
-                goto process_pixel;
-            
-            }
-
-        } else {
-
-            // alocando thread a um pixel singular
-            x = blockIdx.x * blockDim.x + threadIdx.x;
-            y = blockIdx.y * blockDim.y + threadIdx.y;
-            if (x >= WIDTH || y >= HEIGHT) return;
-
-        }
-
-    } else {
-
-        // alocando thread a um pixel singular
-        x = blockIdx.x * blockDim.x + threadIdx.x;
-        y = blockIdx.y * blockDim.y + threadIdx.y;
-        if (x >= WIDTH || y >= HEIGHT) return;
-    
-    }
-
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // posição da câmera em cartesianos
     //@{
@@ -423,8 +390,8 @@ __global__ void raytraceKernel( unsigned char* pixels,
             → relaciona x,y à aspect_ratio e u,v.
             → fov_y controla quantos graus temos visão. 
     */
-    
-process_pixel:
+ 
+
     float aspect     = float(WIDTH) / float(HEIGHT);
     float tanHalfFov = tan(fov_y * 0.5f * (float)M_PI / 180.0f);
     float u          = (2.0f * (x + 0.5f) / WIDTH  - 1.0f) * aspect * tanHalfFov;
@@ -434,7 +401,7 @@ process_pixel:
         determinando a direção do raio:
             
             ◦ cálculo de onde apontam na tela: combinação linear,
-            ◦ se relacionam à cam_[fwd, right, up]:
+            ◦ se relacionam à [fwd, right, up]:
                 → fwd: centro da imagem (profundidade),
                 → right: deslocamento horizontal (u),
                 → up: deslocamento vertical (v).
@@ -443,9 +410,9 @@ process_pixel:
     */
 
     // direção do raio: u*right + v*up + forward, normalizada
-    double dx = u * cam_right.x + v * cam_up.x + cam_fwd.x;
-    double dy = u * cam_right.y + v * cam_up.y + cam_fwd.y;
-    double dz = u * cam_right.z + v * cam_up.z + cam_fwd.z;
+    double dx = u * right.x + v * up.x + fwd.x;
+    double dy = u * right.y + v * up.y + fwd.y;
+    double dz = u * right.z + v * up.z + fwd.z;
     double dlen = sqrt(dx*dx + dy*dy + dz*dz);
     dx /= dlen; dy /= dlen; dz /= dlen;
 
@@ -465,9 +432,9 @@ process_pixel:
                 → phi   = ângulo azimutal (rotação em torno do eixo z)
     */
 
-    double ox = cam_position.x;
-    double oy = cam_position.y;
-    double oz = cam_position.z;
+    double ox = pos.x;
+    double oy = pos.y;
+    double oz = pos.z;
 
     double r0     = sqrt(ox*ox + oy*oy + oz*oz);
     double theta0 = acos(fmax(-1.0, fmin(1.0, oz / r0)));
@@ -540,25 +507,24 @@ process_pixel:
         disk_r1         —   borda interna do disco em unidades de RS. Fisicamente deve ser ≥ 3 RS (ISCO — última órbita estável). 
                             Menor que isso é ficção. Aumentar esconde a região mais brilhante próxima ao horizonte.
 
-        disk_r2         —   borda externa do disco. Controla o tamanho visual do disco. Maior = disco ocupa mais da tela. Se cam_dist < disk_r2 
+        disk_r2         —   borda externa do disco. Controla o tamanho visual do disco. Maior = disco ocupa mais da tela. Se dist < disk_r2 
                             a câmera está dentro do disco — resultado é tela laranja.
 
-        escape_radius   —   distância que o kernel considera "infinito". Deve ser maior que cam_dist. Se muito pequeno, raios que deveriam chegar ao starmap são cortados antes. 
-                            RS * 200 é seguro para qualquer cam_dist até RS * 100.
+        escape_radius   —   distância que o kernel considera "infinito". Deve ser maior que dist. Se muito pequeno, raios que deveriam chegar ao starmap são cortados antes. 
+                            RS * 200 é seguro para qualquer dist até RS * 100.
 
         as variáveis abaixo são cruciais para o funcionamento do buraco negro.
         elas estão descritas em sequência de aparição no loop.
     */
     
     int perlin_count = 0;
-
     const double step = rs * BH::STEP_FACTOR;
     
     //const double step = rs * 0.05;
     //const double ADAPTIVE_FACTOR = 5.0;
     //const double MAX_STEPS = 5000;    
 
-    const double escape_radius = rs * 20.0;
+    const double escape_radius = rs * 200.0;
 
     const double disk_r1 = rs * 3.0;
     const double disk_r2 = rs * 12.0;
@@ -578,71 +544,68 @@ process_pixel:
     float accum_alpha = 0.0f;   // opacidade acumulada [0,1]
                                 // quando accum_alpha ≥ 1.0 → disco completamente opaco → break
 
-    unsigned char R = 0, G = 0, B = 0;
-
-
     double y_prev = s.r * cos(s.theta);
     double y_next = y_prev;
-  
-    enum class RayResult { 
-        NONE, 
-        HORIZON, 
-        ESCAPE, 
-        DISK, 
-        FALLBACK 
-    };
     
-    RayResult result = RayResult::NONE;
     //@}
-
+    
+    /*
+    if(x % 1000 == 1 && y % 3 == 1) 
+        printf("[INSIDE_KERNEL] rs=%.3e escape=%.3e pos=(%.3e,%.3e,%.3e)\n",
+            rs, escape_radius, pos.x, pos.y, pos.z);
+    */
+       
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // loop em si
     //@{
 
 
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // escape por parâmetro de impacto:
-    //@{
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // escape por parâmetro de impacto:
+        //@{
 
-    /*
-        
-        •   uma forma de Early Exit que analisa a relação entre o impacto da energia
-            de um raio para determinar se ele deve ser integrado. A lógica é: se um raio
-            tiver energia e momento angular, quando relacionados por 'b', maior que um threshold
-            predeterminado como LIMITE que um raio integrado tem, ele deve ser cortado.
+        /*
+            
+            •   uma forma de Early Exit que analisa a relação entre o impacto da energia
+                de um raio para determinar se ele deve ser integrado. A lógica é: se um raio
+                tiver energia e momento angular, quando relacionados por 'b', maior que um threshold
+                predeterminado como LIMITE que um raio integrado tem, ele deve ser cortado.
 
 
-        IMPACT_CUTOFF:  [2,4]: vai de agressivo para moderado, cortando efeitos, sombra mais sólida.
-                        [4,6]: conservador, preserva Photon Ring e o disco é renderizado normalmente.
-                        [6,8]: ainda mais conservador.
-                        [10+]: o efeito do algoritmo some, quase tudo integra.
-    */
+            IMPACT_CUTOFF:  [2,4]: vai de agressivo para moderado, cortando efeitos, sombra mais sólida.
+                            [4,6]: conservador, preserva Photon Ring e o disco é renderizado normalmente.
+                            [6,8]: ainda mais conservador.
+                            [10+]: o efeito do algoritmo some, quase tudo integra.
+        */
     {
-        double b = (s.E > 1e-10) ? fabs(s.L / s.E) : 1e30;
-        const double b_crit = 2.598 * rs;  // 3√3/2 * rs
+            double b = (s.E > 1e-10) ? fabs(s.L / s.E) : 1e30;
+            const double b_crit = 2.598 * rs;  // 3√3/2 * rs
 
-        if(b > b_crit * BH::IMPACT_CUTOFF && s.r > disk_r2 * 1.5 && s.dr > 0.0){
+            if(b > b_crit * BH::IMPACT_CUTOFF && s.r > rs * 3.0 && s.dr > 0.0){
 
-            // raio escapa com certeza — amostra starmap direto
-            float u_tex = (float)(s.phi / (2.0 * M_PI)) + 0.5f;
-            float v_tex = (float)(s.theta / M_PI);
-            float4 color = tex2D<float4>(starmap, u_tex, v_tex);
+                // raio escapa com certeza — amostra starmap direto
+                float u_tex = (float)(s.phi / (2.0 * M_PI)) + 0.5f;
+                float v_tex = (float)(s.theta / M_PI);
+                float4 color = tex2D<float4>(starmap, u_tex, v_tex);
 
-            R = (unsigned char)(fminf(color.x * 255.0f, 255.0f));
-            G = (unsigned char)(fminf(color.y * 255.0f, 255.0f));
-            B = (unsigned char)(fminf(color.z * 255.0f, 255.0f));
+                R = (unsigned char)(fminf(color.x * 255.0f, 255.0f));
+                G = (unsigned char)(fminf(color.y * 255.0f, 255.0f));
+                B = (unsigned char)(fminf(color.z * 255.0f, 255.0f));
 
-            result = RayResult::ESCAPE;
-
-            goto write_pixel;
-        }
+                result = RayResult::ESCAPE;
+                
+                return;
+            }
     }
-    //@}
+        //@}
 
 
     for(int i = 0; i < BH::MAX_STEPS; i++){
-    
+        
+        if(x == 400 && y == 300 && i == 0)
+            printf("loop start: s.r=%.3e result=%d\n", s.r, (int)result);
+
 
         /*
             1. Horizonte PRÉ-step  → raio já estava dentro do horizonte antes de integrar
@@ -772,9 +735,7 @@ process_pixel:
             B = (unsigned char)(fminf(color.z * 255.0f, 255.0f));
 
             result = RayResult::ESCAPE;
-
-
-            goto write_pixel;
+            
             break;
         }
         //@}
@@ -827,7 +788,7 @@ process_pixel:
 
             */
             
-            float doppler = dopplerShift(r_current, s.phi, cam_position, rs);
+            float doppler = dopplerShift(r_current, s.phi, pos, rs);
             float rs_freq = redShift(r_current, rs);
             
             float perlin_noise = perlinNoise(perlin, r_current, s.phi, disk_r1, disk_r2);
@@ -838,7 +799,7 @@ process_pixel:
             
             float temp = (float)((r_current - disk_r1) / (disk_r2 - disk_r1));
             float temp_norm = powf(1.0f - temp, 0.75f);
-            
+           
             float disk_r, disk_g, disk_b;
             temperatureToColor(temp_norm, disk_r, disk_g, disk_b);
        
@@ -952,175 +913,168 @@ process_pixel:
         B = (unsigned char)(fminf((accum_b + B/255.0f * bg_weight) * 255.0f, 255.0f));
 
     }
+    
+    /*
+    if(x == 400 && y == 300)
+        printf("[RESULT_KERNEL] result=%d R=%d G=%d B=%d r0=%.3e rs=%.3e\n",
+            (int)result, R, G, B, r0, rs);
+    */
     //@} 
 
-
-write_pixel:
-    if(is_gl){
-        
-        uchar4 pixel = make_uchar4(R, G, B, 255);
-        surf2Dwrite(pixel, surface, x * sizeof(uchar4), y);
-
-    } else {
-
-        int idx = (y * WIDTH + x) * 3;
-
-        pixels[idx+0] = R;
-        pixels[idx+1] = G;
-        pixels[idx+2] = B;
-        
-        SH_RECORD(d_state_counts, result);
-
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────────────────────────────
-    /*
-    if (x == WIDTH/2 && y == HEIGHT/2)
-        printf("[debug] perlin_samples=%d\n", perlin_count);
-    */
-    // ─────────────────────────────────────────────────────────────────────────────────────────────────
-    
-
 }
-//@}
 
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// wrapper para chamada do kernel
-//@{
 
 
-#include <chrono>
-using Clock = std::chrono::high_resolution_clock;
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 
-void launchRaytrace( bool is_gl, void* pixels, 
-                     int WIDTH, int HEIGHT,
-                     double3 pos, double3 fwd, double3 right, double3 up,
-                     float fov_y, double rs, cudaTextureObject_t starmap, cudaTextureObject_t perlin){
+__global__ __launch_bounds__(256, 2) 
+void raytraceKernelPNG( unsigned char* pixels,
+                        int WIDTH,
+                        int HEIGHT,
+                        double3 pos,
+                        double3 fwd, 
+                        double3 right,
+                        double3 up,
+                        float fov_y,
+                        double rs,  
+                        cudaTextureObject_t starmap,
+                        cudaTextureObject_t perlin){
 
-    dim3 blockSize(16, 16);
-    dim3 numBlocks((WIDTH + 15)/16, (HEIGHT + 15)/16);
-
-
-    if(is_gl){
-        
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        // aplicação sem o PersisThreads
-        /*
-        raytraceKernel<<<numBlocks, blockSize, 0, kernel_stream>>>(
-            NULL, is_gl, WIDTH, HEIGHT, pos, fwd, right, up, fov_y, rs, starmap, perlin, surface
-        );
-        */
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        
-        size_t nbytes = WIDTH * HEIGHT * 3;
-
-        cudaArray_t cuda_array = (cudaArray_t)pixels;
-        
-        cudaResourceDesc res_desc = {};
-        res_desc.resType         = cudaResourceTypeArray;
-        res_desc.res.array.array = cuda_array;
-
-        cudaSurfaceObject_t surface;
-        cudaCreateSurfaceObject(&surface, &res_desc);
+    RayResult result = RayResult::NONE;
+    int x = 0, y = 0;
+    unsigned char R = 0, G = 0, B = 0;
     
-        unsigned char* d_pixels = nullptr;
-        cudaMalloc(&d_pixels, nbytes);
-        cudaMemset(d_pixels, 0, nbytes);
+
+    x = blockIdx.x * blockDim.x + threadIdx.x;
+    y = blockIdx.y * blockDim.y + threadIdx.y;
+    if (x >= WIDTH || y >= HEIGHT) return;
         
+    R = 0; G = 0; B = 0;
+
+    pixelProcess(   x, y, 
+                    R, G, B,
+                    WIDTH, HEIGHT, 
+                    pos, fwd, right, up,
+                    fov_y, rs, 
+                    starmap, perlin,
+                    result
+                 );
+
+    int idx = (y * WIDTH + x) * 3;
+
+    pixels[idx+0] = R;
+    pixels[idx+1] = G;
+    pixels[idx+2] = B;
     
-        int* d_counter;
-        cudaMalloc(&d_counter, sizeof(int));
-        cudaMemset(d_counter, 0, sizeof(int)); 
-
-        dim3 numBlocksPersis(96);
-        dim3 blockSizePersis(256);
-
-            raytraceKernel<<<numBlocksPersis, blockSizePersis>>>(is_gl ? nullptr : d_pixels, is_gl,  
-                                                                 WIDTH, HEIGHT,
-                                                                 pos, fwd, right, up,
-                                                                 fov_y, rs, starmap, perlin, 
-                                                                 surface, d_counter 
-                                                                 );
-
-
-        cudaFree(d_counter);
-        cudaDestroySurfaceObject(surface);
-
-
-    } else {
-    //@{
-
-
-        // ─────────────────────────────────────────────────────────────────────────────────────────────────
-        //@{
-        /*
-        */
-        static bool is_sim = false;
-        static double ms_per_frame = -1.0;
-        static auto t_last = Clock::now();
-
-        if(ms_per_frame > 0.0){
-            auto now = Clock::now();
-
-            double delta = std::chrono::duration<double, std::milli>(now - t_last).count();
-            // suaviza com média móvel exponencial — evita saltos por GC ou stall de driver
-            ms_per_frame = ms_per_frame * 0.9 + delta * 0.1;
-        }
-        t_last = Clock::now();
-        //@}
-        // ─────────────────────────────────────────────────────────────────────────────────────────────────
-        
-        size_t nbytes = WIDTH * HEIGHT * 3;
-            
-        unsigned char* d_pixels;
-        cudaMalloc(&d_pixels, nbytes);
-        cudaMemset(d_pixels, 0, nbytes);
-        
-
-        unsigned int* d_counts_ptr = nullptr;
-        cudaGetSymbolAddress((void**)&d_counts_ptr, d_state_counts);
-        cudaMemset(d_counts_ptr, 0, SH_NUM_STATES * sizeof(unsigned int));
-
-        cudaStream_t kernel_stream;
-        cudaStreamCreate(&kernel_stream);
-
-        raytraceKernel<<<numBlocks, blockSize, 0, kernel_stream>>>(
-            d_pixels, is_gl, WIDTH, HEIGHT, pos, fwd, right, up, fov_y, rs, starmap, perlin, 0, 0
-        );
-
-
-        //cudaDeviceSynchronize();
-        cudaStreamSynchronize(kernel_stream); 
-        cudaMemcpy(pixels, d_pixels, nbytes, cudaMemcpyDeviceToHost);
-
-
-        // ─────────────────────────────────────────────────────────────────────────────────────────────────
-        //@{
-        /*
-        printf("ms_per_frame [2]: %f", ms_per_frame);
-        */
-        if (ms_per_frame < 0.0) {
-            auto now = Clock::now();
-            ms_per_frame = std::chrono::duration<double, std::milli>(now - t_last).count();
-        }
-
-        if (ms_per_frame > 0.0 && is_sim){
-            updateCorrectionFactor(ms_per_frame);
-        }
-        is_sim = true;
-        //@}
-        // ─────────────────────────────────────────────────────────────────────────────────────────────────
-        
-
-        cudaStreamDestroy(kernel_stream);  
-        cudaFree(d_pixels);
-    }
-    //@}
+    SH_RECORD(d_state_counts, result);
 
 }
-//@}
+
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+void launchPNG( unsigned char* pixels,
+                int WIDTH, 
+                int HEIGHT,
+                double3 pos, 
+                double3 fwd, 
+                double3 right, 
+                double3 up,
+                float fov_y,
+                double rs,
+                cudaTextureObject_t starmap,
+                cudaTextureObject_t perlin){
+    
+
+    size_t nbytes = WIDTH * HEIGHT * 3;
+    dim3 blockSize(16, 16);
+    dim3 numBlocks((WIDTH + 15)/16, (HEIGHT + 15)/16);
+        
+    fprintf(stderr, "[PNG] launching: %dx%d rs=%.3e MAX_STEPS=%d STEP_FACTOR=%.4f\n",
+        WIDTH, HEIGHT, rs, BH::MAX_STEPS, BH::STEP_FACTOR);
+
+    // ─────────────────────────────────────────────────────────────────────────────────────────────────
+    //@{
+    /*
+    */
+    static bool is_sim = false;
+    static double ms_per_frame = -1.0;
+    static auto t_last = Clock::now();
+
+    if(ms_per_frame > 0.0){
+        auto now = Clock::now();
+
+        double delta = std::chrono::duration<double, std::milli>(now - t_last).count();
+        // suaviza com média móvel exponencial — evita saltos por GC ou stall de driver
+        ms_per_frame = ms_per_frame * 0.9 + delta * 0.1;
+    }
+    t_last = Clock::now();
+    //@}
+    // ─────────────────────────────────────────────────────────────────────────────────────────────────
+   
+        
+    unsigned char* d_pixels;
+    cudaMalloc(&d_pixels, nbytes);
+    cudaMemset(d_pixels, 0, nbytes);
+    
+
+    unsigned int* d_counts_ptr = nullptr;
+    cudaGetSymbolAddress((void**)&d_counts_ptr, d_state_counts);
+    cudaMemset(d_counts_ptr, 0, SH_NUM_STATES * sizeof(unsigned int));
+
+
+    cudaStream_t kernel_stream;
+    cudaStreamCreate(&kernel_stream);
+
+
+    raytraceKernelPNG<<<numBlocks, blockSize, 0, kernel_stream>>>
+        (d_pixels, 
+         WIDTH, 
+         HEIGHT, 
+         pos, fwd, right, up, 
+         fov_y, 
+         rs, 
+         starmap, 
+         perlin
+        );
+
+
+    fprintf(stderr, "[PNG] waiting for sync...\n");
+    cudaStreamSynchronize(kernel_stream); 
+    fprintf(stderr, "[PNG] sync done\n");
+    cudaError_t sync_err = cudaGetLastError();
+    fprintf(stderr, "[PNG] sync err: %s\n", cudaGetErrorString(sync_err));
+
+    cudaMemcpy(pixels, d_pixels, nbytes, cudaMemcpyDeviceToHost);
+
+
+    // ─────────────────────────────────────────────────────────────────────────────────────────────────
+    //@{
+    /*
+    printf("ms_per_frame [2]: %f", ms_per_frame);
+    */
+    if (ms_per_frame < 0.0) {
+        auto now = Clock::now();
+        ms_per_frame = std::chrono::duration<double, std::milli>(now - t_last).count();
+    }
+
+    if (ms_per_frame > 0.0 && is_sim){
+        updateCorrectionFactor(ms_per_frame);
+    }
+    is_sim = true;
+    //@}
+    // ─────────────────────────────────────────────────────────────────────────────────────────────────
+    
+
+    cudaStreamDestroy(kernel_stream);  
+    cudaFree(d_pixels);
+
+}
 
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

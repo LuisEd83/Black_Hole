@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../src/distribution.hpp"
+#include "../../src/distribution.hpp"
 
 void setStatePtr(StateHeatmap* s);
 unsigned int* getShDCounts();

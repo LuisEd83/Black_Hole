@@ -1,14 +1,6 @@
-#include "feedbacks.cuh"
-#include "geodesic.cuh"
+#include "headers/feedbacks.cuh"
+#include "headers/geodesic.cuh"
 #include "../src/temp_and_time.hpp"
-
-#include <cuda_runtime.h>
-#include <iostream>
-#include <iomanip>
-#include <cmath>
-#include <chrono>
-#include <cstdio>
-#include <unistd.h>
 
 using Clock = std::chrono::high_resolution_clock;
 

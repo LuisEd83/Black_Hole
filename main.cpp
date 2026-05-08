@@ -1,4 +1,5 @@
-#include "cuda/geodesic.cuh"
+#include "cuda/headers/geodesic.cuh"
+
 #include "src/engine.hpp"
 #include "src/constants.hpp"
 #include "src/starmap.hpp"
@@ -19,7 +20,11 @@ enum class Resolution{
     Unknown
 };
 
-Resolution fromString(const std::string& s){
+using namespace BH;
+using namespace glm;
+using namespace std;
+
+Resolution fromString(const string& s){
 
     if (s == "Minimal") return Resolution::Minimal;
     if (s == "HD")      return Resolution::HD;
@@ -32,19 +37,17 @@ Resolution fromString(const std::string& s){
     return Resolution::Unknown;
 }
 
-using namespace BH;
-
 int main() {
 
     activateSetFlags();
 
     // ── recursos de suporte (mesmo que o main atual) ──────────────────
     if (!starmapLoad("data/starmap.png")) {
-        std::cerr << "Falha ao carregar starmap\n";
+        cerr << "Falha ao carregar starmap\n";
         return 1;
     }
     if (!perlinLoad("data/perlin.txt")) {
-        std::cerr << "Falha ao carregar perlin\n";
+        cerr << "Falha ao carregar perlin\n";
         return 1;
     }
    
@@ -52,37 +55,34 @@ int main() {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     
 
-    const double cam_dist      = RS * BH::factor;
+    const double cam_dist      = RS * factor;
     const double graus         = 10.0f;
     const double elevation_angle = 5.0f;
     float fov_y                = 60.0f;
 
-    float elevation = glm::radians((float)graus);
-    float azimuth   = glm::radians((float)elevation_angle);
+    float elevation = radians((float)graus);
+    float azimuth   = radians((float)elevation_angle);
         
-    glm::vec3 pos = glm::vec3(
-        float(cam_dist) * BH::X_COEF,
-        float(cam_dist) * BH::Y_COEF,
-        float(cam_dist) * BH::Z_COEF
+    vec3 pos = vec3(
+        float(cam_dist) * X_COEF,
+        float(cam_dist) * Y_COEF,
+        float(cam_dist) * Z_COEF
     );
 
-    glm::vec3 target    = glm::vec3(float(-RS * 3.0), float(RS * 1.5), 0.0f);
-    glm::vec3 world_up = glm::vec3(0.0f, 0.0f, 1.0f);
+    vec3 target    = vec3(float(-RS * 3.0), float(RS * 1.5), 0.0f);
+    vec3 world_up = vec3(0.0f, 0.0f, 1.0f);
 
-    glm::vec3 fwd   = glm::normalize(target - pos);
-    glm::vec3 right = glm::normalize(glm::cross(fwd, world_up));
-    glm::vec3 up    = glm::normalize(glm::cross(right, fwd));
-    
-
-
+    vec3 fwd   = glm::normalize(target - pos);
+    vec3 right = glm::normalize(glm::cross(fwd, world_up));
+    vec3 up    = glm::normalize(glm::cross(right, fwd));
 
     // ── config da engine ──────────────────────────────────────────────
-    EngineConfig cfg;
+    SimConfig cfg;
     cfg.WIDTH  = 800;
     cfg.HEIGHT = 600;
 
     
-    switch(fromString(BH::res)){
+    switch(fromString(res)){
         case Resolution::Minimal:   cfg.WIDTH = 800;  cfg.HEIGHT = 600;  break;
         case Resolution::HD:        cfg.WIDTH = 1280; cfg.HEIGHT = 720;  break;
         case Resolution::HDplus:    cfg.WIDTH = 1600; cfg.HEIGHT = 900;  break;
@@ -92,22 +92,39 @@ int main() {
         case Resolution::_4K:       cfg.WIDTH = 4096; cfg.HEIGHT = 2048; break;
 
         default:
-            std::cerr << "Resolução desconhecida: " << BH::res << "\n";
+            cerr << "Resolução desconhecida: " << BH::res << "\n";
             return 1;
     }
 
-
-    cfg.title  = "BlackHoleSim";
-    cfg.fov_y  = 60.0f;
-
-    cfg.cam_pos    = pos;
-    cfg.cam_target = target;
-    cfg.cam_up     = world_up;
+    cfg.title = "BlackHoleSim";
+    cfg.fov_y = 60.0f;
+    cfg.pos = pos;
+    cfg.target = target;
+    cfg.world_up = world_up;
     cfg.use_direct_vectors = true;
-    cfg.cam_fwd    = fwd;
-    cfg.cam_right  = right;
-    cfg.cam_up_vec = up;
+    cfg.fwd = fwd;
+    cfg.right = right;
+    cfg.up = up;
+    cfg.starmap = starmapGet(); 
+    cfg.perlin = perlinGet(); 
 
+    cout << cfg.starmap << " ," << cfg.starmap << "\n";
+    
+    cfg.getVectors(pos, fwd, right, up);
+    
+    /*
+        printf("=== DEBUG CAMERA ===\n");
+        printf("pos   = (%.3e, %.3e, %.3e)\n", pos.x, pos.y, pos.z);
+        printf("fwd   = (%.3f, %.3f, %.3f)  len=%.3f\n", fwd.x, fwd.y, fwd.z, glm::length(fwd));
+        printf("right = (%.3f, %.3f, %.3f)  len=%.3f\n", right.x, right.y, right.z, glm::length(right));
+        printf("up    = (%.3f, %.3f, %.3f)  len=%.3f\n", up.x, up.y, up.z, glm::length(up));
+        printf("use_direct = %d\n", cfg.use_direct_vectors);
+        printf("RS = %.3e  cam_dist = %.3e\n", RS, (double)cfg.cam_dist);
+        printf("fov_y = %.2f  WIDTH=%d HEIGHT=%d\n", cfg.fov_y, cfg.WIDTH, cfg.HEIGHT);
+        printf("target = (%.3e, %.3e, %.3e)\n", cfg.target.x, cfg.target.y, cfg.target.z);
+        printf("====================\n");
+    
+    */
 
     // ── abre janela e entra no loop ───────────────────────────────────
     engineRun(cfg);

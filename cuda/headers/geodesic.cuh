@@ -1,12 +1,17 @@
 #pragma once
 
-
-
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// geodesic.cuh
-// Header compartilhado entre geodesic.cu (NVCC) e geodesic_host.cpp (GCC).
-
 #include <cuda_runtime.h>
+#include "../../src/constants.hpp"
+
+
+enum class RayResult { 
+    NONE, 
+    HORIZON, 
+    ESCAPE, 
+    DISK, 
+    FALLBACK 
+};
+
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -55,17 +60,33 @@ struct Rays {
 // declaração do kernel — definido em geodesic.cu, lançado em geodesic_host.cpp
 
 
-__global__ void raytraceKernel( bool is_gl, unsigned char* pixels,
-                                int WIDTH, int HEIGHT,
-                                double3 cam_position,
-                                double3 cam_fwd,
-                                double3 cam_right,
-                                double3 cam_up,
-                                float fov_y,
-                                double rs,
-                                cudaTextureObject_t starmap,
-                                cudaTextureObject_t perlin
-                               );
+void launchGL(  cudaSurfaceObject_t surface,
+                int WIDTH, 
+                int HEIGHT,
+                double3 pos,
+                double3 fwd,
+                double3 right,
+                double3 up,
+                float fov_y,
+                double rs,
+                cudaTextureObject_t starmap,
+                cudaTextureObject_t perlin
+            );
+
+
+void launchPNG( unsigned char* pixels,
+                int WIDTH, 
+                int HEIGHT,
+                double3 pos,
+                double3 fwd,
+                double3 right,
+                double3 up,
+                float fov_y,
+                double rs,
+                cudaTextureObject_t starmap,
+                cudaTextureObject_t perlin
+            );
+
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // mais declarações de funções:
@@ -78,8 +99,8 @@ unsigned int* getStateCountsPtr();
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 
-extern __device__ cudaTextureObject_t starmap;
-extern __device__ cudaTextureObject_t perlin;
+//extern __device__ cudaTextureObject_t starmap;
+//extern __device__ cudaTextureObject_t perlin;
 
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

@@ -1,6 +1,6 @@
-#include "cuda/geodesic.cuh"
-#include "cuda/feedbacks.cuh"
-#include "cuda/comms.cuh"
+#include "cuda/headers/geodesic.cuh"
+#include "cuda/headers/feedbacks.cuh"
+#include "cuda/headers/comms.cuh"
 
 #include "src/temp_and_time.hpp"
 #include "src/distribution.hpp"
@@ -12,6 +12,7 @@
 #include <glm/glm.hpp>
 #include <iostream>
 #include <fstream>
+#include <surface_types.h>
 #include <vector>
 #include <chrono>
 #include <iomanip>
@@ -28,11 +29,18 @@
 */
 
 
+
 // declaração de raytraceCUDA — definida em geodesic_host.cpp
-void raytraceCUDA( bool is_gl,  void* pixels,
-                   int WIDTH, int HEIGHT,
-                   glm::vec3 pos, glm::vec3 fwd, glm::vec3 right, glm::vec3 up,
-                   float fov_y);
+void raytraceCUDA(  unsigned char* pixels,
+                    cudaSurfaceObject_t surface,
+                    int WIDTH, 
+                    int HEIGHT,
+                    glm::vec3 pos, 
+                    glm::vec3 fwd, 
+                    glm::vec3 right, 
+                    glm::vec3 up,
+                    float fov_y
+                  );
 
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -78,6 +86,8 @@ Resolution fromString(const std::string& s){
 
 int main() {
     
+    //@{
+
     activateSetFlags();
 
     // gera nome do arquivo com timestamp
@@ -93,7 +103,8 @@ int main() {
          << ":"
          << std::setw(2) << tm_info->tm_min
          << ".png";
-
+    
+    //@}
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // parâmetros de teste
@@ -256,7 +267,7 @@ int main() {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // warmup da gpu: etapa talvez inútil, ou boa quando curta.
     //@{
-
+    /* 
 
     std::cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
     std::cout << "\n• Aquecendo GPU...\n\n";
@@ -269,7 +280,7 @@ int main() {
 
     auto t_w0 = Clock::now();
 
-        raytraceCUDA(BH::is_gl, pixels.data(), floor(WIDTH/2), floor(HEIGHT/2), pos, fwd, right, up, fov_y);
+        raytraceCUDA(BH::is_gl, pixels.data(), floor(WIDTH/2), floor(HEIGHT/2), pos, fwd, right, up, fov_y, 0);
 
     auto t_w1 = Clock::now();
 
@@ -307,7 +318,7 @@ int main() {
     
     //state_warm.stop();
     
-
+    */
     //@}
 
 
@@ -315,7 +326,9 @@ int main() {
     // runs de benchmark
     //@{
    
-   
+
+    double warm_ms = 0;
+
     std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
     std::cout << "• Benchmark (" << RUNS << " runs)" << "\n\n";
    
@@ -341,8 +354,29 @@ int main() {
 
         auto t_r0 = Clock::now();
 
-            raytraceCUDA(BH::is_gl, pixels.data(), WIDTH, HEIGHT, pos, fwd, right, up, fov_y);
-        
+        double3 c_pos   = { pos.x,   pos.y,   pos.z   };
+        double3 c_fwd   = { fwd.x,   fwd.y,   fwd.z   };
+        double3 c_right = { right.x, right.y, right.z };
+        double3 c_up    = { up.x,    up.y,    up.z    };
+            
+
+            launchPNG(   pixels.data(),
+                         WIDTH, 
+                         HEIGHT,
+                         c_pos, 
+                         c_fwd, 
+                         c_right, 
+                         c_up,
+                         fov_y, 
+                         rs, 
+                         starmapGet(), 
+                         perlinGet());
+
+
+
+            //raytraceCUDA(pixels.data(), 0, WIDTH, HEIGHT, pos, fwd, right, up, fov_y);
+                
+            
         auto t_r1 = Clock::now();
 
    

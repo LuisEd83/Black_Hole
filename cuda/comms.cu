@@ -1,5 +1,5 @@
-#include "geodesic.cuh"
-#include "comms.cuh"
+//#include "headers/geodesic.cuh"
+#include "headers/comms.cuh"
 
 __device__ unsigned int d_state_counts[SH_NUM_STATES];
 //static StateHeatmap* state = nullptr;

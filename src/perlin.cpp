@@ -17,6 +17,11 @@ static cudaArray_t perlin_array = nullptr;
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+cudaTextureObject_t perlinGet(){
+    return perlin;
+}
+
+
 
 bool perlinLoad(const char* path){
     

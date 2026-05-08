@@ -58,12 +58,14 @@
 
 
 #include "temp_and_time.hpp"
+
+#include <cuda_runtime.h>
+
 #include <cstddef>
 #include <cstdio>
 #include <cstring>
 #include <pthread.h>
 #include <unistd.h>
-#include <cuda_runtime.h>
 
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

@@ -38,15 +38,23 @@ void getRes(std::string res){
 */
 
 
+
+auto ck = [](const char* tag){
+    auto err = cudaGetLastError();    
+    fprintf(stderr, "[CUDA] %s: %s\n", tag, cudaGetErrorString(err));
+};
+
+
 namespace BH {
     
     const bool is_sim = true;
     const bool is_gl = true;
+    const bool is_persis = false;
 
     const std::string res = "Minimal";
 
     constexpr int    MAX_STEPS       = 5000;
-    constexpr double STEP_FACTOR     = 0.5;
+    constexpr double STEP_FACTOR     = 0.70;
     
     constexpr double IMPACT_CUTOFF  = 7.5;
     constexpr double MAX_STEPS_DIV  = 2.5;
@@ -54,12 +62,13 @@ namespace BH {
     constexpr double ADAPTIVE_FACTOR = 5.0;
     constexpr double EMISSIVITY_RATE = 0.001;
 
-    constexpr double factor = 8.0f;
+    constexpr double factor = 10.0f;
     
     constexpr double X_COEF = 1.2f;
     constexpr double Y_COEF = 0.6f;
     constexpr double Z_COEF = 0.12f;
 
+    
 
 
     /*
