@@ -27,18 +27,35 @@ set(DEPS glfw GLEW::GLEW glm::glm OpenGL::GL)
 # geodesic.cu    → inclui só cuda_runtime → compilado por NVCC, sem GLEW/GLFW
 # main.cpp       → inclui gl_engine.h    → compilado por GCC
 
-add_executable(BlackHoleCUDA
-    main.cpp
-    src/engine.cpp
-    src/host.cpp
-    cuda/geodesic.cu
+
+set(BUILD_MODE "all" CACHE STRING "Build mode: png | gl | all")
+
+set(SOURCES_COMMON
     cuda/comms.cu
     cuda/feedbacks.cu
-    src/temp_and_time.cpp
     src/lodepng.cpp
     src/starmap.cpp
     src/perlin.cpp
+    src/temp_and_time.cpp
+    src/host.cpp
+    src/engine.cpp
+    main.cpp
 )
+
+set(SOURCES_PNG cuda/png_kernel.cu)
+set(SOURCES_GL  cuda/gl_kernel.cu)
+
+
+if(BUILD_MODE STREQUAL "png")
+    set(ACTIVE_SOURCES ${SOURCES_COMMON} ${SOURCES_PNG})
+elseif(BUILD_MODE STREQUAL "gl")
+    set(ACTIVE_SOURCES ${SOURCES_COMMON} ${SOURCES_GL})
+else()
+    set(ACTIVE_SOURCES ${SOURCES_COMMON} ${SOURCES_PNG} ${SOURCES_GL})
+endif()
+
+
+add_executable(BlackHoleCUDA ${ACTIVE_SOURCES})
 
 target_link_libraries(BlackHoleCUDA PRIVATE
     ${DEPS}
@@ -51,6 +68,9 @@ set_target_properties(BlackHoleCUDA PROPERTIES
     CUDA_SEPARABLE_COMPILATION ON
     CUDA_ARCHITECTURES         native
     LINKER_LANGUAGE            CUDA     # deixa o NVCC fazer o link final
+)
+target_compile_options(BlackHoleCUDA PRIVATE
+    $<$<COMPILE_LANGUAGE:CUDA>:-G>
 )
 
 get_target_property(CUDA_INCLUDE_DIRS CUDA::cudart INTERFACE_INCLUDE_DIRECTORIES)
