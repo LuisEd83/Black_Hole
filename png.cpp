@@ -1,13 +1,13 @@
-#include "cuda/headers/geodesic.cuh"
-#include "cuda/headers/feedbacks.cuh"
-#include "cuda/headers/comms.cuh"
+#include "headers/geodesic.cuh"
+#include "headers/feedbacks.cuh"
+#include "headers/comms.cuh"
 
-#include "src/temp_and_time.hpp"
-#include "src/distribution.hpp"
-#include "src/constants.hpp"
-#include "src/starmap.hpp"
-#include "src/perlin.hpp"
-#include "src/lodepng.h"
+#include "headers/temp_and_time.hpp"
+#include "headers/distribution.hpp"
+#include "headers/constants.hpp"
+#include "headers/starmap.hpp"
+#include "headers/perlin.hpp"
+#include "headers/lodepng.h"
 
 #include <glm/glm.hpp>
 #include <iostream>
@@ -30,7 +30,6 @@
 
 
 
-// declaração de raytraceCUDA — definida em geodesic_host.cpp
 void raytraceCUDA(  unsigned char* pixels,
                     cudaSurfaceObject_t surface,
                     int WIDTH, 
@@ -139,7 +138,6 @@ int main() {
         RUNS    —   quantas vezes o kernel é executado para calcular a média de tempo. Não afeta a imagem, só a precisão do benchmark. 
                     Para desenvolvimento use 1, para benchmark use 5.
         
-        small_angle —
     */
     
      
@@ -160,19 +158,13 @@ int main() {
             return 1;
     }
     
-    const int RUNS   = 1;       // quantas vezes rodar para média de tempo 
-                                // bom = 5
+    const int RUNS = 1;     // quantas vezes rodar para média de tempo 
+                            // bom = 5
 
-
-    //const double graus = 10.0f;
-    //const double elevation_angle = 5.0f;
-    //float elevation = glm::radians((float)graus);
-    //float azimuth = glm::radians((float)elevation_angle);
-
-    float fov_y = 45.0f;
+    const float fov_y = BH::FOV_Y;
     
-    const double cam_dist = RS * BH::factor;
-    const double factor = BH::factor;
+    const double cam_dist = RS * BH::CAMERA_FACTOR;
+    const double factor = BH::CAMERA_FACTOR;
 
     glm::vec3 pos = glm::vec3(
         float(cam_dist) * BH::X_COEF,
@@ -180,7 +172,7 @@ int main() {
         float(cam_dist) * BH::Z_COEF
     );
     
-    glm::vec3 target    = glm::vec3(float(-RS * 3.0), float(RS * 1.5), 0.0f);
+    glm::vec3 target    = glm::vec3(0.0f, 0.0f, 0.0f);
     glm::vec3 world_up  = glm::vec3(0.0f, 0.0f, 1.0f);
     //glm::vec3 target    = glm::vec3(0.0f, 0.0f, 0.0f);
    
@@ -240,7 +232,8 @@ int main() {
 
         return 1;
     }
-    
+   
+
     //@}
 
     
@@ -267,7 +260,7 @@ int main() {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // warmup da gpu: etapa talvez inútil, ou boa quando curta.
     //@{
-    /* 
+    /*
 
     std::cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
     std::cout << "\n• Aquecendo GPU...\n\n";
@@ -280,7 +273,15 @@ int main() {
 
     auto t_w0 = Clock::now();
 
-        raytraceCUDA(BH::is_gl, pixels.data(), floor(WIDTH/2), floor(HEIGHT/2), pos, fwd, right, up, fov_y, 0);
+        raytraceCUDA(pixels.data(), 
+                    0,
+                    floor(WIDTH/2), 
+                    floor(HEIGHT/2), 
+                    pos, 
+                    fwd, 
+                    right,
+                    up,
+                    fov_y);
 
     auto t_w1 = Clock::now();
 
@@ -319,6 +320,7 @@ int main() {
     //state_warm.stop();
     
     */
+
     //@}
 
 
@@ -327,14 +329,12 @@ int main() {
     //@{
    
 
-    double warm_ms = 0;
-
     std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
     std::cout << "• Benchmark (" << RUNS << " runs)" << "\n\n";
    
-
-    double total_expected_ms = warm_ms * RUNS;
+    double warm_ms = 0;
      
+    double total_expected_ms = warm_ms * RUNS;
     std::cout << "    ◦ Conclusão: ~" << estimatedEnd(Clock::now(), total_expected_ms) << "  [Agora: " << printNow() << "]\n\n";
     
 
@@ -360,22 +360,17 @@ int main() {
         double3 c_up    = { up.x,    up.y,    up.z    };
             
 
-            launchPNG(   pixels.data(),
-                         WIDTH, 
-                         HEIGHT,
-                         c_pos, 
-                         c_fwd, 
-                         c_right, 
-                         c_up,
-                         fov_y, 
-                         rs, 
-                         starmapGet(), 
-                         perlinGet());
-
-
-
-            //raytraceCUDA(pixels.data(), 0, WIDTH, HEIGHT, pos, fwd, right, up, fov_y);
-                
+           
+        raytraceCUDA(   pixels.data(), 
+                        0, 
+                        WIDTH, 
+                        HEIGHT, 
+                        pos, 
+                        fwd, 
+                        right, 
+                        up, 
+                        fov_y);
+               
             
         auto t_r1 = Clock::now();
 

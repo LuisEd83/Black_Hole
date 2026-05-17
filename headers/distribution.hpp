@@ -1,5 +1,4 @@
-#ifndef STATE_HEATMAP_H
-#define STATE_HEATMAP_H
+#pragma once
 
 /* 
     info
@@ -82,13 +81,13 @@ static const char* SH_STATE_NAMES[SH_NUM_STATES] = {
     "FALLBACK"
 };
 
-/* ANSI colors per state */
+// ANSI colors
 static const char* SH_STATE_COLORS[SH_NUM_STATES] = {
-    "\033[38;5;240m",   /* NONE     — dim gray   */
-    "\033[38;5;196m",   /* HORIZON  — red        */
-    "\033[38;5;45m",    /* ESCAPE   — cyan       */
-    "\033[38;5;214m",   /* DISK     — orange     */
-    "\033[38;5;135m",   /* FALLBACK — purple     */
+    "\033[38;5;240m",   /* NONE     — gray      */
+    "\033[38;5;196m",   /* HORIZON  — red       */
+    "\033[38;5;45m",    /* ESCAPE   — cyan      */
+    "\033[38;5;214m",   /* DISK     — orange    */
+    "\033[38;5;135m",   /* FALLBACK — purple    */
 };
 
 
@@ -108,9 +107,10 @@ typedef struct {
     unsigned int* d_counts;
     unsigned int total;    
     volatile int running;
-    pthread_t thread;
 
+    pthread_t thread;
     pthread_mutex_t mutex;
+
 
 } SH_State;
 
@@ -131,8 +131,8 @@ static void sh_draw(unsigned int* h, unsigned int total) {
     static int first_draw = 1;
     if (!first_draw)
         fprintf(stderr, "\033[%dA", SH_NUM_STATES + 3);
-    
     first_draw = 0;
+    
 
     float pct_done = total > 0 ? (float)settled / total * 100.f : 0.f;
    
@@ -147,8 +147,8 @@ static void sh_draw(unsigned int* h, unsigned int total) {
     for(int i = 0; i < SH_NUM_STATES; i++){
         
         float frac  = (settled > 0) ? (float)h[i] / settled : 0.f;
-        int   filled = (int)(frac * SH_BAR_W + 0.5f);
-        int   empty  = SH_BAR_W - filled;
+        int filled = (int)(frac * SH_BAR_W + 0.5f);
+        int empty  = SH_BAR_W - filled;
 
         char bar_filled[SH_BAR_W * 3 + 1]; bar_filled[0] = '\0';
         char bar_empty [SH_BAR_W * 3 + 1]; bar_empty [0] = '\0';
@@ -197,8 +197,7 @@ static void* sh_poll_thread(void* arg){
     SH_State* sh = (SH_State*)arg;
     unsigned int h[SH_NUM_STATES] = {0};
     
-    cudaSetDevice(0); // cria contexto próprio para este thread — independente do flagSet do main
-    
+    cudaSetDevice(0);   
     cudaStream_t snap_stream;
     cudaStreamCreateWithFlags(&snap_stream, cudaStreamNonBlocking);
 
@@ -213,7 +212,7 @@ static void* sh_poll_thread(void* arg){
 
         cudaStreamSynchronize(snap_stream);   
        
-
+    
         pthread_mutex_lock(&sh->mutex);
 
             sh_draw(h, sh->total);
@@ -244,12 +243,10 @@ class StateHeatmap {
 
         }
 
-        ~StateHeatmap(){
-        }
+        ~StateHeatmap(){}
 
         void start(unsigned int* d_counts){
             
-
             sh_.d_counts = d_counts;
             cudaMemset(d_counts, 0, SH_NUM_STATES * sizeof(unsigned int));
 
@@ -262,8 +259,8 @@ class StateHeatmap {
         void stop(){
                 
             if (!sh_.verbose) return; 
-
             sh_.running = 0;
+
             pthread_join(sh_.thread, NULL);
 
             pthread_mutex_destroy(&sh_.mutex);
@@ -273,6 +270,3 @@ class StateHeatmap {
 
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-
-#endif

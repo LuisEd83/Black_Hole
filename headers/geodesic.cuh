@@ -1,35 +1,12 @@
 #pragma once
 
 #include <cuda_runtime.h>
-#include "../../src/constants.hpp"
 
+#include "constants.hpp"
+#include "platform.hpp"
+#include "comms.cuh"
 
-enum class RayResult { 
-    NONE, 
-    HORIZON, 
-    ESCAPE, 
-    DISK, 
-    FALLBACK 
-};
-
-
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
-
-
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// constantes físicas
-
-
-static const double c       = 299792458.0;  // velocidade da luz (m/s)
-static const double G       = 6.67430e-11; // constante de gravitação universal, m³/(kg·s²)
-static const double BH_MASS = 8.54e36;     // massa de Sagittarius A*, kg
-
-// Schwarzschild radius: r_s = 2GM/c²
-// raio do horizonte de eventos — abaixo disso, a luz não escapa
-static const double RS = 2.0 * G * BH_MASS / (c * c);
-
+using namespace BH;
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // struct Rays:
@@ -86,21 +63,6 @@ void launchPNG( unsigned char* pixels,
                 cudaTextureObject_t starmap,
                 cudaTextureObject_t perlin
             );
-
-
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// mais declarações de funções:
-
-
-void activateSetFlags();
-unsigned int* getStateCountsPtr();
-
-
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-
-//extern __device__ cudaTextureObject_t starmap;
-//extern __device__ cudaTextureObject_t perlin;
 
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

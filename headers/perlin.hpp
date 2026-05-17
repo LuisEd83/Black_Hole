@@ -1,7 +1,5 @@
 #pragma once
-
-#include <cuda_runtime.h>
-#include <texture_types.h>
+#include "platform.hpp"
 
 // objeto de textura - criado por perlinLoad(), usado pelo kernel
 extern cudaTextureObject_t perlin;

@@ -2,13 +2,16 @@
 // Responsável por: alocar memória na GPU, lançar o kernel, copiar resultado de volta.
 
 
-#include "starmap.hpp"
-#include "perlin.hpp"
-#include "../cuda/headers/geodesic.cuh"
+#include "../headers/starmap.hpp"
+#include "../headers/perlin.hpp"
+#include "../headers/geodesic.cuh"
 
 #include <iostream>
 #include <glm/glm.hpp>
-#include <texture_types.h>
+
+#if BH_CPU_BACKEND
+#include "cpu_raytrace.hpp"
+#endif
 
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -22,11 +25,10 @@
         fov_y   → campo de visão vertical em graus
 */ 
 
-extern const double RS;
-
 using namespace std;
 using namespace glm;
 
+#if !BH_CPU_BACKEND
 void launchGL(  cudaSurfaceObject_t surface, 
                 int WIDTH, 
                 int HEIGHT,
@@ -39,7 +41,6 @@ void launchGL(  cudaSurfaceObject_t surface,
                 cudaTextureObject_t starmap, 
                 cudaTextureObject_t perlin);
 
-
 void launchPNG( unsigned char* pixels,
                 int WIDTH, 
                 int HEIGHT,
@@ -51,6 +52,7 @@ void launchPNG( unsigned char* pixels,
                 double rs, 
                 cudaTextureObject_t starmap, 
                 cudaTextureObject_t perlin);
+#endif
 
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -71,22 +73,24 @@ void raytraceCUDA(  unsigned char* pixels,
     double3 c_fwd   = { fwd.x,   fwd.y,   fwd.z   };
     double3 c_right = { right.x, right.y, right.z };
     double3 c_up    = { up.x,    up.y,    up.z    };
-        
+    
+    #if BH_CPU_BACKEND
+        launchRaytraceCPU(  pixels, WIDTH, HEIGHT,
+                            c_pos, c_fwd, c_right, c_up,
+                            fov_y, rs_local, starmap, perlin);
+    #else
     if(BH::is_gl){
-        cout << "Acessando HOST GL\n";
-        cout << "Starmap: " << starmap << ", Perlin: " << perlin << "\n";
         launchGL(surface, WIDTH, HEIGHT, c_pos, c_fwd, c_right, c_up, fov_y, RS, starmap, perlin);
-
+        cout << "aaa";
     } else {
-        cout << "Acessando HOST PNG\n";
-        cout << "Starmap: " << starmap << ", Perlin: " << perlin << "\n";
         launchPNG(pixels, WIDTH, HEIGHT, c_pos, c_fwd, c_right, c_up, fov_y, RS, starmap, perlin);
     }
 
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess)
         cerr << "[CUDA] Erro: " << cudaGetErrorString(err) << "\n";
-
+    
+    #endif
 }
 
 

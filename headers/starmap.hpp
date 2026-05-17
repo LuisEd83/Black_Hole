@@ -1,7 +1,6 @@
 #pragma once
- 
-#include <cuda_runtime.h>
- 
+#include "platform.hpp"
+
 // objeto de textura — criado por starmapLoad(), usado pelo kernel
 extern cudaTextureObject_t starmap;
  

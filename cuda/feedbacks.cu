@@ -1,6 +1,6 @@
-#include "headers/feedbacks.cuh"
-#include "headers/geodesic.cuh"
-#include "../src/temp_and_time.hpp"
+#include "../headers/feedbacks.cuh"
+#include "../headers/geodesic.cuh"
+#include "../headers/temp_and_time.hpp"
 
 using Clock = std::chrono::high_resolution_clock;
 
@@ -35,10 +35,10 @@ void updateCorrectionFactor(double real_ms){
 
     double fator_novo = real_ms / dummy_ms;
 
-
     // lê média e contagem atuais do arquivo
     double media  = 1.25;
     int    count  = 0;
+
 
     if(FILE* f = fopen(FACTOR_FILE, "r")){
         fscanf(f, "%lf %d", &media, &count);
@@ -332,7 +332,7 @@ void warmupAndEstimate(int WIDTH, int HEIGHT, int maxSteps, double step, double 
 
     int extra_seconds = (int)(estTotalMs/ 1000.0);
 
-    std::cout << "        └ Conclusão: ~" << estimatedEnd(Clock::now(), extra_seconds) << "  [Agora: " << printNow() << "]\n\n";
+    //std::cout << "        └ Conclusão: ~" << estimatedEnd(Clock::now(), extra_seconds) << "  [Agora: " << printNow() << "]\n\n";
 
     /*
     if (estFps < 1.0){

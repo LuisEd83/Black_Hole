@@ -1,0 +1,85 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": { "major": 3, "minor": 24, "patch": 0 },
+
+  "configurePresets": [
+    {
+      "name": "linux-release",
+      "displayName": "Linux — Release",
+      "description": "GCC + Ninja. Instale as deps: sudo apt install libglfw3-dev libglew-dev libglm-dev",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "linux-debug",
+      "displayName": "Linux — Debug",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "macos-release",
+      "displayName": "macOS — Release (CPU backend)",
+      "description": "Clang + Ninja, sem CUDA. Funciona em Apple Silicon e Intel. Instale as deps: brew install glfw glew glm",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "windows-vs2022",
+      "displayName": "Windows — Visual Studio 2022 (x64)",
+      "description": "MSVC + CUDA Toolkit. Instale as deps via vcpkg: vcpkg install glfw3 glew glm",
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "windows-vs2019",
+      "displayName": "Windows — Visual Studio 2019 (x64)",
+      "generator": "Visual Studio 16 2019",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    }
+  ],
+
+  "buildPresets": [
+    {
+      "name": "linux-release",
+      "configurePreset": "linux-release",
+      "configuration": "Release"
+    },
+    {
+      "name": "linux-debug",
+      "configurePreset": "linux-debug",
+      "configuration": "Debug"
+    },
+    {
+      "name": "macos-release",
+      "configurePreset": "macos-release",
+      "configuration": "Release"
+    },
+    {
+      "name": "windows-vs2022",
+      "configurePreset": "windows-vs2022",
+      "configuration": "Release"
+    },
+    {
+      "name": "windows-vs2019",
+      "configurePreset": "windows-vs2019",
+      "configuration": "Release"
+    }
+  ]
+}

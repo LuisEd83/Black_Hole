@@ -1,5 +1,5 @@
-#include "engine.hpp"
-#include "constants.hpp"
+#include "../headers/engine.hpp"
+#include "../headers/constants.hpp"
  
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
@@ -83,10 +83,10 @@ void raytraceCUDA(  unsigned char* pixels,
 
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// shader loading
 //@{
 
 
-static cudaGraphicsResource_t cuda_tex_resource = nullptr;
 
 static string loadShaders(const string& path){
     
@@ -132,7 +132,9 @@ static GLuint compileShaders(GLenum type, const char* src){
 
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// gl functions
 //@{
+
 
 
 static GLuint buildProgram(const char* vert, const char* frag){
@@ -172,12 +174,6 @@ static GLuint buildProgram(const char* vert, const char* frag){
     return program;
 }
 
-//@}
-
-
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//@{
-
 
 static GLuint makeGLFrameTexture(int WIDTH, int HEIGHT){
         
@@ -212,6 +208,7 @@ static GLuint makeGLFrameTexture(int WIDTH, int HEIGHT){
 
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// callbacks functions
 //@{
 
 
@@ -221,8 +218,8 @@ static void mouseButtons(GLFWwindow* window, int button, int action, int){
         processando eventual click do mouse: filtra drag como o press do botão esquerdo.   
     */
         
-    
-    SimConfig* config = (SimConfig*)glfwGetWindowUserPointer(window);
+     auto* config = static_cast<SimConfig*>(glfwGetWindowUserPointer(window));
+     if(!config) return;   
 
     if(button == GLFW_MOUSE_BUTTON_LEFT){ config->dragging = (action == GLFW_PRESS); }
 }
@@ -233,7 +230,8 @@ static void cursorPos(GLFWwindow* window, double x, double y){
     
     */
     
-    SimConfig* config = (SimConfig*)glfwGetWindowUserPointer(window);
+    auto* config = static_cast<SimConfig*>(glfwGetWindowUserPointer(window));
+    if(!config) return;   
 
     const float sensitivity = 10e-10f;
 
@@ -252,13 +250,16 @@ static void cursorPos(GLFWwindow* window, double x, double y){
     config->last_mouse_y = y;
     
 
-    config->azimuth += dx * sensitivity;
-    config->elevation += dy * sensitivity;
+    config->x_c += dx * sensitivity;
+    config->y_c += dy * sensitivity;
     
     // apenas uma garantia para a câmera não poder virar de cabeça pra baixo
     const float limit = radians(89.0f);
-    if(config->elevation > limit) config->elevation = limit;
-    if(config->elevation < -limit) config->elevation = -limit;
+    if(config->y_c > limit)
+        config->y_c = limit;
+
+    if(config->y_c < -limit)
+        config->y_c = -limit;
     
     config->use_direct_vectors = false;
     config->will_rerender = true;
@@ -267,7 +268,8 @@ static void cursorPos(GLFWwindow* window, double x, double y){
 
 static void scrollEvent(GLFWwindow* window, double, double y_off){
 
-    SimConfig* config = (SimConfig*)glfwGetWindowUserPointer(window);
+     auto* config = static_cast<SimConfig*>(glfwGetWindowUserPointer(window));
+     if(!config) return;   
 
     config->cam_dist -= float(y_off) * config->cam_dist * 0.0f;
     if(config->cam_dist < 1.0f) config->cam_dist = 1.0f;
@@ -277,6 +279,9 @@ static void scrollEvent(GLFWwindow* window, double, double y_off){
 
 
 static void keypressEvent(GLFWwindow* window, int key, int /*scancode*/, int action, int /*mods*/){
+
+    auto* config = static_cast<SimConfig*>(glfwGetWindowUserPointer(window));
+    if(!config) return;   
 
     if(key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
         glfwSetWindowShouldClose(window, GLFW_TRUE);
@@ -305,7 +310,11 @@ static void frameBuffer(GLFWwindow*, int WIDTH, int HEIGHT){
 
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// run loop
 //@{ 
+
+
+static cudaGraphicsResource_t cuda_tex_resource = nullptr;
 
 
 void engineRun(SimConfig& config){
@@ -315,11 +324,16 @@ void engineRun(SimConfig& config){
     // passo 1: iniciar GLFW
     //@{
 
+
     //glfwInitHint(GLFW_PLATFORM, GLFW_ANY_PLATFORM);
     glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_X11);
         
     if(!glfwInit()){
-        cerr << "[ENGINE]: Falha ao iniciar GLFW.\n";
+        const char* description;
+        glfwGetError(&description);
+
+        cerr << "[ENGINE]: Falha ao iniciar GLFW: " << description << "\n";
+
         return;
     }
     
@@ -328,10 +342,27 @@ void engineRun(SimConfig& config){
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     
-    GLFWwindow* window = glfwCreateWindow(config.WIDTH, config.HEIGHT, config.title.c_str(), nullptr, nullptr);
+
+    //GLFWwindow* window = glfwCreateWindow(config.WIDTH, config.HEIGHT, config.title.c_str(), nullptr, nullptr);
+
+    GLFWwindow* window = nullptr;
+    for(int attempt = 0; attempt < 3 && !window; attempt++){
+        window = glfwCreateWindow(config.WIDTH, config.HEIGHT, 
+                                  config.title.c_str(), nullptr, nullptr);
+        if(!window){
+            const char* desc;
+            glfwGetError(&desc);
+            cerr << "[ENGINE]: attempt " << attempt+1 << " failed: " << desc << "\n";
+            glfwTerminate();
+            glfwInit();
+        }
+    }
 
     if(!window){
-        cerr << "[ENGINE]: Falha ao criar janela GLFW.\n";         
+        const char* description;
+        int code = glfwGetError(&description);
+
+        cerr << "[ENGINE]: Falha ao criar janela GLFW. code=" << code << " desc=" << description << "\n";
         glfwTerminate();
 
         return;
@@ -373,7 +404,7 @@ void engineRun(SimConfig& config){
     glfwSetKeyCallback(window, keypressEvent);
     glfwSetFramebufferSizeCallback(window, frameBuffer);
 
-    std::cout << "Callbacks Inicializados.\n";
+    //std::cout << "Callbacks Inicializados.\n";
     //@}
 
 
@@ -382,11 +413,11 @@ void engineRun(SimConfig& config){
     //@{
 
     vec3 dir = normalize(config.pos - config.target);
-    config.elevation = asin(dir.z);
-    config.azimuth = atan2(dir.y, dir.x);
+    config.y_c = asin(dir.z);
+    config.x_c = atan2(dir.y, dir.x);
     config.will_rerender = true;
     
-    std::cout << "Camera Inicial Aplicada.\n";
+    //std::cout << "Camera Inicial Aplicada.\n";
     //@}
 
 
@@ -425,7 +456,7 @@ void engineRun(SimConfig& config){
     // textura unit 0. funciona como um índice, você pode armazenar várias texturas.
     // nesse caso, temos apenas uma, logo índice = 0. 
         
-    std::cout << "Recursos Aplicados.\n";
+    //std::cout << "Recursos Aplicados.\n";
 
      //@}
     
@@ -495,14 +526,9 @@ void engineRun(SimConfig& config){
             cudaCreateSurfaceObject(&surface, &res_desc);
             ck("CreateSurface");
 
-            std::cout << "Kernel Iniciado.\n";
+            //std::cout << "Kernel Iniciado.\n";
                
-            
-            double3 c_pos   = { pos.x,   pos.y,   pos.z   };
-            double3 c_fwd   = { fwd.x,   fwd.y,   fwd.z   };
-            double3 c_right = { right.x, right.y, right.z };
-            double3 c_up    = { up.x,    up.y,    up.z    };
-            
+
 /*
 
             launchGL(   surface,
@@ -520,6 +546,7 @@ void engineRun(SimConfig& config){
            
 */
 
+
            raytraceCUDA(NULL,
                         surface,
                         config.WIDTH,
@@ -530,11 +557,6 @@ void engineRun(SimConfig& config){
                         up,
                         config.fov_y
                      );
-
-
-
-            cudaStreamSynchronize(0);
-
             ck("PostKernel");
 
             // desmapeia antes do GL desenhar
@@ -543,7 +565,11 @@ void engineRun(SimConfig& config){
 
             cudaGraphicsUnmapResources(1, &cuda_tex_resource, 0);
             ck("UnmapResources"); 
-            
+                
+            GLenum gl_err = glGetError();
+            fprintf(stderr, "[ENG] glGetError after unmap: %u\n", gl_err);
+        
+
             cout << "─────────────────────────────────────────────────────────────────────────────────────────────────\n"; 
 
             //glBindTexture(GL_TEXTURE_2D, textures);
@@ -553,6 +579,20 @@ void engineRun(SimConfig& config){
             // sem glTexSubImage2D — kernel já escreveu na textura
             config.will_rerender = false;
         }
+
+        // lê de volta 1 pixel da textura para confirmar que o dado chegou
+    unsigned char pixel[4] = {0,0,0,0};
+    glBindTexture(GL_TEXTURE_2D, textures);
+    glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    // lê pixel (0,0)
+    GLuint fbo;
+        glGenFramebuffers(1, &fbo);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, fbo);
+    glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, textures, 0);
+    glReadPixels(0, 0, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+        glDeleteFramebuffers(1, &fbo);
+    fprintf(stderr, "[GL] pixel(0,0) = %d %d %d %d\n", pixel[0], pixel[1], pixel[2], pixel[3]);
 
 
         glClear(GL_COLOR_BUFFER_BIT);
@@ -567,7 +607,6 @@ void engineRun(SimConfig& config){
         frame_count++;
         auto now = Clock::now();
 
-        //std::cout << frame_count << "\n";
 
         float elapsed_time = chrono::duration<float>(now - then).count();
         if(elapsed_time >= 1.0f){
@@ -600,6 +639,9 @@ void engineRun(SimConfig& config){
     glfwTerminate(); 
     
     //@}
+
+
+//@}
 
 
 }

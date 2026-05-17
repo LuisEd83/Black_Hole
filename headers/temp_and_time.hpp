@@ -1,22 +1,17 @@
 #pragma once
 
-#include <cuda_runtime.h>
-#include <iostream>
-#include <iomanip>
-#include <cmath>
+#include <string>
 #include <chrono>
-#include <cstdio>
-#include <unistd.h>
+#include <fstream>
 
-
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// wrapper para a função no feedbacks.cu 
-
-void warmupAndEstimate(int WIDTH, int HEIGHT, int maxSteps, double step, double rs);
-
+using Clock = std::chrono::high_resolution_clock;
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// mais benchmarks 
 
-void updateCorrectionFactor(double real_ms);
-double getCorrectionFactor();
+std::string printNow();
+std::string estimatedEnd(Clock::time_point t0, double duration_ms);
+double elapsedMs(Clock::time_point t0, Clock::time_point t1);
+float getCpuTemp();
+float getGpuTemp();
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

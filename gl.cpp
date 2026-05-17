@@ -1,9 +1,9 @@
-#include "cuda/headers/geodesic.cuh"
+#include "headers/geodesic.cuh"
 
-#include "src/engine.hpp"
-#include "src/constants.hpp"
-#include "src/starmap.hpp"
-#include "src/perlin.hpp"
+#include "headers/engine.hpp"
+#include "headers/constants.hpp"
+#include "headers/starmap.hpp"
+#include "headers/perlin.hpp"
 
 #include <glm/glm.hpp>
 #include <iostream>
@@ -55,10 +55,10 @@ int main() {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     
 
-    const double cam_dist      = RS * factor;
-    const double graus         = 10.0f;
+    const double cam_dist = RS * BH::CAMERA_FACTOR;
+    const double graus = 10.0f;
     const double elevation_angle = 5.0f;
-    float fov_y                = 60.0f;
+    float fov_y = 60.0f;
 
     float elevation = radians((float)graus);
     float azimuth   = radians((float)elevation_angle);
@@ -69,12 +69,14 @@ int main() {
         float(cam_dist) * Z_COEF
     );
 
+
     vec3 target    = vec3(float(-RS * 3.0), float(RS * 1.5), 0.0f);
     vec3 world_up = vec3(0.0f, 0.0f, 1.0f);
 
     vec3 fwd   = glm::normalize(target - pos);
     vec3 right = glm::normalize(glm::cross(fwd, world_up));
     vec3 up    = glm::normalize(glm::cross(right, fwd));
+
 
     // ── config da engine ──────────────────────────────────────────────
     SimConfig cfg;

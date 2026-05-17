@@ -1,22 +1,22 @@
+#include "../headers/geodesic.cuh"
+
 #include <cuda_runtime.h>
-
-#include "../src/constants.hpp"
-#include "headers/geodesic.cuh"
-
 #include <cmath>
 
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-/* geodesicRHS — calcula as derivadas da geodésica de Schwarzschild
-
-  equação:  d²xᵘ/dλ² + Γᵘ_αβ (dxᵅ/dλ)(dx^β/dλ) = 0
-      → dados os estados atuais, computa as derivadas relativas a esse estado.
-
-  Γ é o símbolo de Christoffel da métrica de Schwarzschild.
-  Na expansão em 3 dimensões, resultam 6 EDOs:
-     d/dλ [ r, θ, φ, dr, dθ, dφ ] = rhs[0..5]
-*/ 
+//geodesicRHS:
 //@{
+/* 
+    geodesicRHS — calcula as derivadas da geodésica de Schwarzschild
+
+    equação:  d²xᵘ/dλ² + Γᵘ_αβ (dxᵅ/dλ)(dx^β/dλ) = 0
+        → dados os estados atuais, computa as derivadas relativas a esse estado.
+
+    Γ é o símbolo de Christoffel da métrica de Schwarzschild.
+    Na expansão em 3 dimensões, resultam 6 EDOs:
+        d/dλ [ r, θ, φ, dr, dθ, dφ ] = rhs[0..5]
+*/ 
 
 
 __device__ void geodesicRHS(const Rays& s, double rhs[6], double rs) {
@@ -58,20 +58,22 @@ __device__ void geodesicRHS(const Rays& s, double rhs[6], double rs) {
 
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-/* rk4Step — integrador Runge-Kutta de 4ª ordem
+// rk4Step:
+//@{
+/* 
+    rk4Step — integrador Runge-Kutta de 4ª ordem:
 
-  Resolve as 6 EDOs acima em um passo de tamanho dl.
-  Faz uma média ponderada de 4 avaliações da derivada em pontos distintos,
-  o que reduz o erro de truncamento para O(dl⁵) por passo.
+    Resolve as 6 EDOs acima em um passo de tamanho dl.
+    Faz uma média ponderada de 4 avaliações da derivada em pontos distintos,
+    o que reduz o erro de truncamento para O(dl⁵) por passo.
 
-  k1 → derivada no ponto inicial
-  k2 → derivada no ponto médio estimado por k1
-  k3 → derivada no ponto médio estimado por k2
-  k4 → derivada no ponto final estimado por k3
-  média final: state += (dl/6) * (k1 + 2k2 + 2k3 + k4)
+    k1 → derivada no ponto inicial
+    k2 → derivada no ponto médio estimado por k1
+    k3 → derivada no ponto médio estimado por k2
+    k4 → derivada no ponto final estimado por k3
+    média final: state += (dl/6) * (k1 + 2k2 + 2k3 + k4)
 
 */
-//@{
 
 
 __device__  void rk4Step(Rays& s, double dl, double rs){
@@ -80,12 +82,15 @@ __device__  void rk4Step(Rays& s, double dl, double rs){
     double k1[6], k2[6], k3[6], k4[6], tmp[6];
     Rays t;
 
+    
 
+    // ─────────────────────────────────────────────────────────────────────────────────────────────────
     // k1: variação no ponto inicial
     geodesicRHS(s, k1, rs);
 
-        
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    
+
+    // ─────────────────────────────────────────────────────────────────────────────────────────────────
     // k2: variação num ponto médio estimado por k1
 
     t = s;
@@ -96,8 +101,8 @@ __device__  void rk4Step(Rays& s, double dl, double rs){
 
     geodesicRHS(t, k2, rs);
     
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    
+    // ─────────────────────────────────────────────────────────────────────────────────────────────────
     // k3: variação num ponto médio estimado por k2
     
 
@@ -108,9 +113,9 @@ __device__  void rk4Step(Rays& s, double dl, double rs){
     t.dr = tmp[3]; t.dtheta = tmp[4]; t.dphi = tmp[5];
 
     geodesicRHS(t, k3, rs);
+    
 
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // ─────────────────────────────────────────────────────────────────────────────────────────────────
     // k4: variação no ponto final estimado por k3
 
 
@@ -121,9 +126,9 @@ __device__  void rk4Step(Rays& s, double dl, double rs){
     t.dr = tmp[3]; t.dtheta = tmp[4]; t.dphi = tmp[5];
 
     geodesicRHS(t, k4, rs);
-
     
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    // ─────────────────────────────────────────────────────────────────────────────────────────────────
     // média final: (k1 + 2k2 + 2k3 + k4) / 6
     
 
@@ -144,7 +149,10 @@ __device__  void rk4Step(Rays& s, double dl, double rs){
 //@{
 
 
-__device__ float dopplerShift(double phi, double r_current, double3 camera_pos, double rs){
+__device__ float dopplerShift(double phi, 
+                              double r_current, 
+                              double3 camera_pos, 
+                              double rs){
     
     /* 
         info
@@ -168,10 +176,12 @@ __device__ float dopplerShift(double phi, double r_current, double3 camera_pos, 
     */
     
     double denominador = 2.0 * r_current - rs;
-    if(denominador <= 0.0) return 1.0f;
+
+    if(denominador <= 0.0) 
+        return 1.0f;
     
-    double beta = sqrt(rs/denominador);
-    double gamma = 1.0 / sqrt(1.0 - beta * beta);
+    double beta = sqrtf(rs/denominador);
+    double gamma = 1.0 / sqrtf(1.0 - beta * beta);
 
     double vx = -sin(phi);
     double vy = cos(phi);
@@ -181,13 +191,13 @@ __device__ float dopplerShift(double phi, double r_current, double3 camera_pos, 
     double dy = camera_pos.y - r_current * sin(phi);
     double dz = camera_pos.z;
 
-    double dlen = sqrt(dx*dx + dy*dy + dz*dz);
-    if(dlen < 1e-10) return 1.0f;
+    double dlen = sqrtf(dx*dx + dy*dy + dz*dz);
+    if(dlen < 1e-10) 
+        return 1.0f;
 
     dx /= dlen; dy /= dlen;
     
     double cos_alpha = vx * dx + vy * dy;
-
 
     double doppler = 1.0 / (gamma * (1.0 - beta * cos_alpha));
     
@@ -195,15 +205,17 @@ __device__ float dopplerShift(double phi, double r_current, double3 camera_pos, 
 }
 
 
-__device__  float perlinNoise(cudaTextureObject_t perlin, 
-                             double r_current, double phi,
-                             double disk_r1, double disk_r2){
+__device__  float perlinNoise(  cudaTextureObject_t perlin, 
+                                double r_current, 
+                                double phi,
+                                double disk_r1, 
+                                double disk_r2){
 
-    //printf("%llu",perlin); 
-    if(perlin == 0) return 1.0f;
+    if(perlin == 0) 
+        return 1.0f;
 
     float u = (float)((r_current - disk_r1) / (disk_r2 - disk_r1));
-    float v = (float)(phi / (2.0 * M_PI)) + 0.5f;
+    float v = (float)(phi / (2.0 * PI)) + 0.5f;
 
     float4 noise = tex2D<float4>(perlin, u ,v);
     
@@ -211,7 +223,8 @@ __device__  float perlinNoise(cudaTextureObject_t perlin,
 }
 
 
-__device__  float redShift(double r_current, double rs){
+__device__  float redShift(double r_current, 
+                           double rs){
 
     /*
         info
@@ -234,13 +247,14 @@ __device__  float redShift(double r_current, double rs){
     float freq_shift = (float)(1.0 / z_grav);
 
     return freq_shift;
-
 }
 
 
-__device__  float diskEmissivity(double r_current, double z_cartesiano,
-                                double disk_r1, double disk_r2,
-                                double height_scale){
+__device__  float diskEmissivity(   double r_current,
+                                    double z_cartesiano,
+                                    double disk_r1, 
+                                    double disk_r2,
+                                    double height_scale){
     
     /*
         info
@@ -274,25 +288,30 @@ __device__  float diskEmissivity(double r_current, double z_cartesiano,
     */
 
 
-    if(r_current < disk_r1 || r_current > disk_r2) return 0.0f;
+    if(r_current < disk_r1 || r_current > disk_r2) 
+        return 0.0f;
     
     double H = r_current * height_scale;
-    double gaussian = exp(-(z_cartesiano * z_cartesiano) / (2.0 * H * H));
+    double gaussian = expf(-(z_cartesiano * z_cartesiano) / (2.0 * H * H));
 
 
     // perfil radial de temperatura — disco interno mais quente
     // T ∝ r^(-3/4) é a lei de Stefan-Boltzmann para disco de acreção
     double t_normalized = (r_current - disk_r1) / (disk_r2 - disk_r1);  // [0,1]
+
     //double temp_profile = pow(1.0 - t_normalized * 0.8, 0.75);       // mais brilhante interno
+    
     double base = 1.0 - t_normalized * 0.8;
-    double temp_profile = sqrt(base) * sqrt(sqrt(base));
+    double temp_profile = sqrtf(base) * sqrtf(sqrtf(base));
 
     return (float)(gaussian * temp_profile);
-
 }
 
 
-__device__  void temperatureToColor(float t_normalized, float& disk_r, float& disk_g, float& disk_b){
+__device__  void temperatureToColor(float t_normalized, 
+                                    float& disk_r, 
+                                    float& disk_g, 
+                                    float& disk_b){
     
     /*
         info
@@ -358,7 +377,6 @@ __device__  void temperatureToColor(float t_normalized, float& disk_r, float& di
 //@{
 
 
-
 __device__ void pixelProcessGL( int x, 
                                 int y,
                                 unsigned char &R, 
@@ -376,6 +394,7 @@ __device__ void pixelProcessGL( int x,
                             ){
             
     RayResult result = RayResult::NONE;
+    
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // posição da câmera em cartesianos
@@ -390,7 +409,7 @@ __device__ void pixelProcessGL( int x,
  
 
     float aspect     = float(WIDTH) / float(HEIGHT);
-    float tanHalfFov = tan(fov_y * 0.5f * (float)M_PI / 180.0f);
+    float tanHalfFov = tanf(fov_y * 0.5f * (float)PI / 180.0f);
     float u          = (2.0f * (x + 0.5f) / WIDTH  - 1.0f) * aspect * tanHalfFov;
     float v          = (1.0f - 2.0f * (y + 0.5f) / HEIGHT) * tanHalfFov;
     
@@ -410,7 +429,7 @@ __device__ void pixelProcessGL( int x,
     double dx = u * right.x + v * up.x + fwd.x;
     double dy = u * right.y + v * up.y + fwd.y;
     double dz = u * right.z + v * up.z + fwd.z;
-    double dlen = sqrt(dx*dx + dy*dy + dz*dz);
+    double dlen = sqrtf(dx*dx + dy*dy + dz*dz);
     dx /= dlen; dy /= dlen; dz /= dlen;
 
 
@@ -433,11 +452,12 @@ __device__ void pixelProcessGL( int x,
     double oy = pos.y;
     double oz = pos.z;
 
-    double r0     = sqrt(ox*ox + oy*oy + oz*oz);
-    double theta0 = acos(fmax(-1.0, fmin(1.0, oz / r0)));
-    double phi0   = atan2(oy, ox);
+    double r0     = sqrtf(ox*ox + oy*oy + oz*oz);
+    double theta0 = acosf(fmaxf(-1.0, fmin(1.0, oz / r0)));
+    double phi0   = atan2f(oy, ox);
         
-    if (theta0 > M_PI - 1e-6) theta0 = M_PI - 1e-6;
+    if(theta0 > PI - 1e-6) 
+        theta0 = PI - 1e-6;
 
     /* 
         • coordenadas cartesianas → esféricas via Jacobiano da transformação esférica → cartesiana
@@ -451,7 +471,7 @@ __device__ void pixelProcessGL( int x,
             ◦ st_safe protege dphi contra divisão por zero quando θ = 0 ou π (polos).
     */
 
-    double st = sin(theta0), ct = cos(theta0), sp = sin(phi0), cp = cos(phi0);
+    double st = sinf(theta0), ct = cosf(theta0), sp = sinf(phi0), cp = cos(phi0);
     double st_safe = (fabs(st) < 1e-12) ? 1e-12 : st;
     
     
@@ -514,26 +534,12 @@ __device__ void pixelProcessGL( int x,
         elas estão descritas em sequência de aparição no loop.
     */
     
-    int perlin_count = 0;
-    const double step = rs * BH::STEP_FACTOR;
-    
-    //const double step = rs * 0.05;
-    //const double ADAPTIVE_FACTOR = 5.0;
-    //const double MAX_STEPS = 5000;    
 
-    const double escape_radius = rs * 200.0;
+    const double step = rs * STEP_FACTOR;
+    const double escape_radius = rs * ESCAPE_FACTOR;
 
     const double disk_r1 = rs * 3.0;
     const double disk_r2 = rs * 12.0;
-    
-    const double adaptive_clamp = 0.001;
-    
-    const double disk_height_scale = 0.08; // maior, aumenta espessura
-    const double disk_opacity = 4.0;
-    const double emission_scale = 2.5;
-    
-    const double closeness = 5.0;
-
 
     float accum_r = 0.0f;       // canal vermelho acumulado
     float accum_g = 0.0f;       // canal verde acumulado
@@ -546,11 +552,7 @@ __device__ void pixelProcessGL( int x,
     
     //@}
     
-    /*
-    if(x % 1000 == 1 && y % 3 == 1) 
-        printf("[INSIDE_KERNEL] rs=%.3e escape=%.3e pos=(%.3e,%.3e,%.3e)\n",
-            rs, escape_radius, pos.x, pos.y, pos.z);
-    */
+ 
        
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -558,32 +560,32 @@ __device__ void pixelProcessGL( int x,
     //@{
 
 
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        // escape por parâmetro de impacto:
-        //@{
+    // ─────────────────────────────────────────────────────────────────────────────────────────────────
+    // escape por parâmetro de impacto:
+    //@{
+    /*
+        
+        •   uma forma de Early Exit que analisa a relação entre o impacto da energia
+            de um raio para determinar se ele deve ser integrado. A lógica é: se um raio
+            tiver energia e momento angular, quando relacionados por 'b', maior que um threshold
+            predeterminado como LIMITE que um raio integrado tem, ele deve ser cortado.
 
-        /*
-            
-            •   uma forma de Early Exit que analisa a relação entre o impacto da energia
-                de um raio para determinar se ele deve ser integrado. A lógica é: se um raio
-                tiver energia e momento angular, quando relacionados por 'b', maior que um threshold
-                predeterminado como LIMITE que um raio integrado tem, ele deve ser cortado.
 
+        IMPACT_CUTOFF:  [2,4]: vai de agressivo para moderado, cortando efeitos, sombra mais sólida.
+                        [4,6]: conservador, preserva Photon Ring e o disco é renderizado normalmente.
+                        [6,8]: ainda mais conservador.
+                        [10+]: o efeito do algoritmo some, quase tudo integra.
+    */
 
-            IMPACT_CUTOFF:  [2,4]: vai de agressivo para moderado, cortando efeitos, sombra mais sólida.
-                            [4,6]: conservador, preserva Photon Ring e o disco é renderizado normalmente.
-                            [6,8]: ainda mais conservador.
-                            [10+]: o efeito do algoritmo some, quase tudo integra.
-        */
     {
             double b = (s.E > 1e-10) ? fabs(s.L / s.E) : 1e30;
             const double b_crit = 2.598 * rs;  // 3√3/2 * rs
 
-            if(b > b_crit * BH::IMPACT_CUTOFF && s.r > rs * 3.0 && s.dr > 0.0){
+            if(b > b_crit * IMPACT_CUTOFF && s.r > rs * 3.0 && s.dr > 0.0){
 
                 // raio escapa com certeza — amostra starmap direto
-                float u_tex = (float)(s.phi / (2.0 * M_PI)) + 0.5f;
-                float v_tex = (float)(s.theta / M_PI);
+                float u_tex = (float)(s.phi / (2.0 * PI)) + 0.5f;
+                float v_tex = (float)(s.theta / PI);
                 float4 color = tex2D<float4>(starmap, u_tex, v_tex);
 
                 R = (unsigned char)(fminf(color.x * 255.0f, 255.0f));
@@ -595,34 +597,28 @@ __device__ void pixelProcessGL( int x,
                 return;
             }
     }
-        //@}
+    //@}
 
 
-    for(int i = 0; i < BH::MAX_STEPS; i++){
+    for(int i = 0; i < MAX_STEPS; i++){
         
         if(x == 400 && y == 300 && i == 0)
             printf("loop start: s.r=%.3e result=%d\n", s.r, (int)result);
 
-
-        /*
-            1. Horizonte PRÉ-step  → raio já estava dentro do horizonte antes de integrar
-            2. Escape PRÉ-step     → raio já havia escapado antes de integrar
-            3. rk4Step             → avança a posição e velocidade do raio
-            4. Horizonte PÓS-step  → raio cruzou o horizonte DURANTE este step
-            5. Disco               → raio cruzou o plano equatorial neste step
-        */
-
-
-
-        // ── horizonte pré-step ────────────────────────────────────────────
+        
+        // ─────────────────────────────────────────────────────────────────────────────────────────────────
+        // horizonte pré-step 
         if(s.r <= rs || s.r <= 0.0){
             R = G = B = 0;
 
             result = RayResult::HORIZON;
             break;
         }
-   
+         
 
+        // ─────────────────────────────────────────────────────────────────────────────────────────────────
+        // escape pré-step
+        //@{
         /*
             quando o raio escapa (r > escape_radius), o ângulo final (θ, φ) representa
             a direção de onde a luz vem — que é a direção em que a câmera "vê" esse pixel.
@@ -635,7 +631,6 @@ __device__ void pixelProcessGL( int x,
             numa direção aparecem deslocadas — é exatamente o efeito visual de lensing.
         */
 
-        // ── escape pré-step ───────────────────────────────────────────────
         if(s.r > escape_radius){
             
 
@@ -647,11 +642,11 @@ __device__ void pixelProcessGL( int x,
                 // ─────────────────────────────────────────────────────────────────────────────────────────────────
             
 
-            while(s.phi >  M_PI) s.phi -= 2.0 * M_PI;
-            while(s.phi < -M_PI) s.phi += 2.0 * M_PI;
+            while(s.phi >  PI) s.phi -= 2.0 * PI;
+            while(s.phi < -PI) s.phi += 2.0 * PI;
 
-            float u_tex = (float)(s.phi / (2.0 * M_PI)) + 0.5f;   // [-π,π] → [0,1]
-            float v_tex = (float)(s.theta / M_PI);                  // [0,π]  → [0,1]
+            float u_tex = (float)(s.phi / (2.0 * PI)) + 0.5f;   // [-π,π] → [0,1]
+            float v_tex = (float)(s.theta / PI);                  // [0,π]  → [0,1]
 
             float4 color = tex2D<float4>(starmap, u_tex, v_tex);
             
@@ -663,10 +658,10 @@ __device__ void pixelProcessGL( int x,
 
             break;
         }
+        //@}
         
-         
-         
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            
+        // ─────────────────────────────────────────────────────────────────────────────────────────────────
         // passo adaptativo 
         //@{
         /*
@@ -681,34 +676,34 @@ __device__ void pixelProcessGL( int x,
 
         double adaptive_step = step;
 
-        if(s.r < BH::ADAPTIVE_FACTOR * rs){
-            adaptive_step = step * (s.r / (rs * BH::ADAPTIVE_FACTOR));  // escala linear: a 1rs → step/5
-            if(adaptive_step < step * adaptive_clamp) adaptive_step = step * adaptive_clamp;  // mínimo
+        if(s.r < ADAPTIVE_FACTOR * rs){
+            adaptive_step = step * (s.r / (rs * ADAPTIVE_FACTOR));  // escala linear: a 1rs → step/5
+            if(adaptive_step < step * ADAPTIVE_CLAMP) 
+                adaptive_step = step * ADAPTIVE_CLAMP;  // mínimo
         }
-    
         //@}
-
             
     
-            rk4Step(s, adaptive_step, rs);
+        // ─────────────────────────────────────────────────────────────────────────────────────────────────
+        // integrador rk4
+        rk4Step(s, adaptive_step, rs);
+ 
+
+        // ─────────────────────────────────────────────────────────────────────────────────────────────────
+        // horizonte pós-step 
+        if(s.r <= rs || s.r <= 0.0 || s.r != s.r){
+            R = G = B = 0;
+
+            result = RayResult::HORIZON;
                 
-            // ── horizonte pós-step ────────────────────────────────────────────
-            if(s.r <= rs || s.r <= 0.0 || s.r != s.r){
-                R = G = B = 0;
-
-                result = RayResult::HORIZON;
-                    
-                break;
-            }
-                    
-
-            y_next = s.r * cos(s.theta);
-      
-    
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            break;
+        }
+        y_next = s.r * cos(s.theta);
+                
+        
+        // ─────────────────────────────────────────────────────────────────────────────────────────────────
         // early exit por MAX_STEPS parcial 
         //@{
-        
         /* 
             • se o raio já deu muitos steps, está longe do BH e se afastando → escapa
                 
@@ -718,13 +713,12 @@ __device__ void pixelProcessGL( int x,
                                 [4,6]:  Moderado.
                                 [6,8]:  Conservador, preserva Photon Ring.
                                 [10+]:  O algoritmo perde efeito.
-
         */
 
-        if(i > BH::MAX_STEPS / BH::MAX_STEPS_DIV && s.r > disk_r2 * 1.5 && s.dr > 0.0){
+        if(i > MAX_STEPS / MAX_STEPS_DIV && s.r > disk_r2 * 1.5 && s.dr > 0.0){
             
-            float u_tex = (float)(s.phi / (2.0 * M_PI)) + 0.5f;
-            float v_tex = (float)(s.theta / M_PI);
+            float u_tex = (float)(s.phi / (2.0 * PI)) + 0.5f;
+            float v_tex = (float)(s.theta / PI);
             float4 color = tex2D<float4>(starmap, u_tex, v_tex);
 
             R = (unsigned char)(fminf(color.x * 255.0f, 255.0f));
@@ -737,25 +731,21 @@ __device__ void pixelProcessGL( int x,
         }
         //@}
     
-
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        // if-case disco
+        
+        // ─────────────────────────────────────────────────────────────────────────────────────────────────
+        // case: disco
         //@{
          
-
         // detecção por emissividade de disco volumétrico
         double x_cartesiano = s.r * sin(s.theta) * cos(s.phi);
         double y_cartesiano = s.r * sin(s.theta) * sin(s.phi);
         double z_cartesiano = s.r * cos(s.theta);
         
         double r_current = sqrt(x_cartesiano*x_cartesiano +  y_cartesiano*y_cartesiano);
-        float emissividade = diskEmissivity(r_current, z_cartesiano, disk_r1, disk_r2, disk_height_scale);
-           
+        float emissividade = diskEmissivity(r_current, z_cartesiano, disk_r1, disk_r2, DISK_HEIGHT_SCALE);
 
-        if(emissividade > BH::EMISSIVITY_RATE){
+        if(emissividade > EMISSIVITY_RATE){
             
-            perlin_count++;
-
             /*
                 
                 Aqui usamos a composição de 3 efeitos físicos:
@@ -821,10 +811,11 @@ __device__ void pixelProcessGL( int x,
 
             }
 
-            float intensity = emissividade * base_brightness * emission_scale * beam_effect;
+
+            float intensity = emissividade * base_brightness * EMISSION_SCALE * beam_effect;
             
             float step_normalized = (float)(adaptive_step / (disk_r2 - disk_r1));
-            float contribution = intensity * step_normalized * disk_opacity;
+            float contribution = intensity * step_normalized * DISK_OPACITY;
             float remaining = 1.0f - accum_alpha;
 
             accum_r     += disk_r * contribution * remaining;
@@ -840,20 +831,18 @@ __device__ void pixelProcessGL( int x,
                 accum_alpha = 1.0f;
                 
                 result = RayResult::DISK;
-
                 break;
             }
-            
-            //@}
 
         }
+        //@}
 
         y_prev = y_next;
+
     }
     //@}
     
-    
-    //  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // ─────────────────────────────────────────────────────────────────────────────────────────────────
     // fallback:
     //@{ 
     /*
@@ -871,6 +860,7 @@ __device__ void pixelProcessGL( int x,
             • engine.cpp faz upload disso direto para a textura OpenGL.
     */
     
+
     if (result == RayResult::NONE){ 
         result = RayResult::FALLBACK;
     }
@@ -880,16 +870,16 @@ __device__ void pixelProcessGL( int x,
 
     } else if (result == RayResult::ESCAPE || result == RayResult::FALLBACK){
 
-        if(result == RayResult::FALLBACK && s.r < rs * closeness){
+        if(result == RayResult::FALLBACK && s.r < rs * CLOSENESS){
             R = G = B = 0;
 
         } else {
             
-            while(s.phi >  M_PI) s.phi -= 2.0 * M_PI;
-            while(s.phi < -M_PI) s.phi += 2.0 * M_PI;
+            while(s.phi >  PI) s.phi -= 2.0 * PI;
+            while(s.phi < -PI) s.phi += 2.0 * PI;
 
-            float u_tex = (float)(s.phi / (2.0 * M_PI)) + 0.5f;
-            float v_tex = (float)(s.theta / M_PI);
+            float u_tex = (float)(s.phi / (2.0 * PI)) + 0.5f;
+            float v_tex = (float)(s.theta / PI);
 
             float4 color = tex2D<float4>(starmap, u_tex, v_tex);
 
@@ -910,20 +900,25 @@ __device__ void pixelProcessGL( int x,
         B = (unsigned char)(fminf((accum_b + B/255.0f * bg_weight) * 255.0f, 255.0f));
 
     }
+    //@} 
     
+
+    // ─── debug ────────────────────────────────────────────────────────────────────────────────────────────
     /*
-    if(x == 400 && y == 300)
+    if(x == 400 && y == 300){
         printf("[RESULT_KERNEL] result=%d R=%d G=%d B=%d r0=%.3e rs=%.3e\n",
             (int)result, R, G, B, r0, rs);
-    */
-    //@} 
 
+    
+        //printf("[PIXEL] r0=%.3e rs=%.3e result=%d R=%d G=%d B=%d\n",
+        //r0, rs, (int)result, R, G, B);
+    }
+    */
+    // ─────────────────────────────────────────────────────────────────────────────────────────────────
 }
 
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-
 
 
 __global__  void raytraceKernelGL(  int WIDTH,
@@ -943,18 +938,18 @@ __global__  void raytraceKernelGL(  int WIDTH,
     int x = 0, y = 0;
     unsigned char R = 0, G = 0, B = 0;
         
-    if(BH::is_persis){
+    if(is_persis){
         
         while(1){
     
             int idx = atomicAdd(d_counter, 1);
-            if(idx >= WIDTH * HEIGHT) return;
-            
+            if(idx >= WIDTH * HEIGHT) 
+                return;
+                
             x = idx % WIDTH;
             y = idx / WIDTH;
             
             R = G = B = 0;
-
 
             pixelProcessGL( x,y,
                             R,G,B,    
@@ -963,8 +958,21 @@ __global__  void raytraceKernelGL(  int WIDTH,
                             fov_y, rs,  
                             starmap, perlin
                         );
+ 
+
+            // ─── debug ────────────────────────────────────────────────────────────────────────────────────────────
+            /*
+            */
+                if(x % 1200 == 0){
+                    printf("Reached result: %d, %d, %d\n", R, G, B );
+                }
+                if(x == 100 && y == 30)
+                    printf("[KERNEL] starmap=%llu perlin=%llu rs=%.3e\n",
+                        (unsigned long long)starmap,
+                        (unsigned long long)perlin, rs);
+            // ─────────────────────────────────────────────────────────────────────────────────────────────────
+
             
-            printf("Reached result: %c, %c, %c\n", R, G, B );
 
             if (x >= WIDTH || y >= HEIGHT || x < 0 || y < 0) return;
                 
@@ -974,6 +982,8 @@ __global__  void raytraceKernelGL(  int WIDTH,
         }
             
     } else {
+        
+        //while(1){
 
         x = blockIdx.x * blockDim.x + threadIdx.x;
         y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -989,13 +999,24 @@ __global__  void raytraceKernelGL(  int WIDTH,
                         starmap, perlin
                      );
 
-        printf("Reached result: %c, %c, %c\n", R, G, B );
-        
+        // ─── debug ────────────────────────────────────────────────────────────────────────────────────────────
+        /*
+            if(x % 1200 == 0){
+                printf("Reached result: %d, %d, %d\n", R, G, B );
+            }
+        */
+            if(x == 100 && y == 30)
+                printf("[KERNEL] starmap=%llu perlin=%llu rs=%.3e\n",
+                    (unsigned long long)starmap,
+                    (unsigned long long)perlin, rs);
+        // ─────────────────────────────────────────────────────────────────────────────────────────────────
+
+             
         if (x >= WIDTH || y >= HEIGHT || x < 0 || y < 0) return;
 
         uchar4 pixel = make_uchar4(R, G, B, 255);
         surf2Dwrite(pixel, surface, x * 4, y);
-
+        
     }
 
 }
@@ -1017,41 +1038,60 @@ void launchGL(  cudaSurfaceObject_t surface,
                 cudaTextureObject_t perlin){
     
 
+    fprintf(stderr, "[PNG] launching: %dx%d rs=%.3e MAX_STEPS=%d STEP_FACTOR=%.4f\n",
+        WIDTH, HEIGHT, rs, BH::MAX_STEPS, BH::STEP_FACTOR);
+
     dim3 numBlocks, blockSize;
 
-    if(BH::is_persis){
+    if(is_persis){
+        
+        numBlocks = dim3(96);
+        blockSize = dim3(256);
+        
+        int* d_counter = nullptr;
+        cudaMalloc(&d_counter, sizeof(int)); ck("d_pixel Malloc");
+        cudaMemset(d_counter, 0, sizeof(int)); ck("d_pixel Memset");
+        
+        printf("Entrando em PERSIS\n");
+        raytraceKernelGL<<<numBlocks, blockSize>>>(
+                WIDTH, 
+                HEIGHT,
+                pos, fwd, right, up,
+                fov_y, 
+                rs, 
+                starmap, 
+                perlin, 
+                surface, 
+                d_counter);
 
-        dim3 numBlocks((WIDTH + 15)/16, (HEIGHT + 15)/16);
-        dim3 blockSize(16, 16);
+        ck("Post-Kernel");
+
+        cudaStreamSynchronize(0); ck("StreamSync");
+
+        cudaFree(d_counter); ck("Free d_counter");
     
     } else {
+    
+        numBlocks = dim3((WIDTH + 15)/16, (HEIGHT + 15)/16);
+        blockSize = dim3(16, 16);
 
-        dim3 numBlocks(96);
-        dim3 blockSize(256);
-    }
-        
-
-    static int* d_counter;
-    if(!d_counter) cudaMalloc(&d_counter, sizeof(int));
-    //cudaMalloc(&d_counter, sizeof(int));
-    cudaMemset(d_counter, 0, sizeof(int)); 
-
-    printf("Malloc/Memset finish.\n");
-
-     raytraceKernelGL<<<numBlocks, blockSize>>>
-        (
-            WIDTH, HEIGHT,
+        printf("Entering NORMAL Kernel\n");
+        raytraceKernelGL<<<numBlocks, blockSize>>>(
+            WIDTH, 
+            HEIGHT,
             pos, fwd, right, up,
-            fov_y, rs, starmap, perlin, 
-            surface, d_counter 
-         );
+            fov_y, 
+            rs, 
+            starmap, 
+            perlin, 
+            surface, 
+            nullptr);
+        
+        ck("Post-Kernel");
 
-    cudaStreamSynchronize(0);
-    printf("Sync finish.\n");
+        cudaStreamSynchronize(0); ck("StreamSync");
 
-    cudaFree(d_counter);
-    printf("Free d_counter.\n");
-
+    }
 }
 
 
