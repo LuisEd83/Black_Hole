@@ -1,29 +1,12 @@
-# black_hole — renderizando buracos-negros em OpenGL com Aceleração de GPU via CUDA.
-
-## Overview
-
-Esse documento cobre tanto a parte programática quanto a parte conceitual sobre a concepção
-de simulações de buracos-negros em C++/CUDA. O projeto é puramente acadêmico, com perspectivas
-de aprendizado e captação de conhecimento sobre renderização de imagem e aceleração de GPU, 
-bem como a satisfação de simular um corpo tão grandioso! 
-
 # 🕳️ Black Hole Sim
- 
-> Renderização em tempo real de buracos-negros usando **Ray Tracing**, **OpenGL** e aceleração de GPU via **CUDA**.
 
-<!-- No caso das imagens, deve-se arrastar o arquivo de imagem diretamente para o editor do README ou usar a sintaxe Markdown: 
-![Alt text](caminho/para/imagem.png). -->
+> Renderização de buracos negros usando **Ray Tracing**, **OpenGL** e aceleração massiva de GPU via **CUDA**.  
+> Projeto acadêmico com foco em renderização física e paralelismo em GPU.
 
-![image1]
-
-![image2]
-
-![image3]
-
-![image4]
+---
 
 ## 📋 Sumário
- 
+
 - [Sobre o Projeto](#-sobre-o-projeto)
 - [Como Funciona](#-como-funciona)
 - [Funcionalidades](#-funcionalidades)
@@ -36,125 +19,244 @@ bem como a satisfação de simular um corpo tão grandioso!
 - [Referências](#-referências)
 - [Licença](#-licença)
 
- 
+---
+
 ## 🌌 Sobre o Projeto
 
-**Black Hole Sim** é um projeto puramente acadêmico que visa explorar a simulação física e visual de um buraco negro a partir de métodos computacionais. A proposta é calular como os raios de luz se comportam próximos ao campo gravitacional gerado pelo corpo compacto, isto é, um corpo de massa extrema compactado em um pequeno volume. 
+**Black Hole Sim** é um simulador físico e visual de buraco negro desenvolvido em C++/CUDA. O objetivo é calcular com precisão como raios de luz se comportam próximos ao campo gravitacional intenso de um corpo compacto — e renderizar esse resultado em tempo real na tela.
 
-O cálculo das geodésicas (trajetórias de raios de luz no espaço-tempo curvo) é realizado em paralelo na GPU via **CUDA**, enquanto a renderização final da cena ocorre via **OpenGL** com shaders GLSL personalizados.
+O cálculo das geodésicas (trajetórias dos fótons no espaço-tempo curvo de Schwarzschild) é executado em paralelo na GPU via **CUDA**. A composição final da cena ocorre via **OpenGL** com shaders GLSL. Como objeto de estudo, usamos o buraco negro supermassivo da Via Láctea: **Sagittarius A\***.
 
-Ademais, para a simulação utilizamos como exemplo o buraco negro supermassivo da nossa Via Láctea: Sagittarius A*.
- 
+---
+
 ## 🔭 Como Funciona
- 
+
 A simulação se baseia em três pilares físico-computacionais:
 
-**1. Ray Tracing**
-Cada pixel da imagem corresponde a um raio lançado a partir de uma câmera virtual. O trajeto do raio é computado usando métodos numéricos, simulando como o fóton se comporta em um espaço-tempo distorcido por um buraco negro.
+### 1. Ray Tracing por Pixel
+Cada pixel da imagem corresponde a um raio lançado a partir de uma câmera virtual. O trajeto do raio é integrado numericamente, simulando como o fóton se propaga em um espaço-tempo distorcido pela gravidade.
 
-**2. Geodésicas em Espaço-Tempo Curvo (CUDA)**
-As equações diferenciais das geodésicas nulas (raios de luz) são integradas numericamente na GPU. Isso permite calcular, para cada raio, se ele escapa do buraco-negro, cai no horizonte de eventos, ou é redirecionado para alguma região do fundo estrelado.
+### 2. Geodésicas em Espaço-Tempo Curvo (CUDA)
+As equações diferenciais das geodésicas nulas (métrica de Schwarzschild) são integradas com um integrador **Runge-Kutta de 4ª ordem** (RK4). Para cada raio, o kernel determina um de quatro resultados possíveis:
 
-**3. Renderização OpenGL**
-O resultado é composto com um fundo estelar real (`starmap.png`), ruído procedural de Perlin e shaders GLSL que aplicam efeitos visuais como o disco de acreção, o desvio para o vermelho (redshift) gravitacional e o desvio para o azul (blueshift) gravitacional.
+| Resultado | Descrição |
+|---|---|
+| `HORIZON` | Raio capturado pelo horizonte de eventos → pixel preto |
+| `ESCAPE` | Raio escapa e atinge o fundo estelar → amostra do starmap |
+| `DISK` | Raio atravessa o disco de acreção → composição volumétrica |
+| `FALLBACK` | Raio orbita indefinidamente → tratamento por distância |
+
+### 3. Efeitos Físicos do Disco de Acreção
+A aparência do disco incorpora três efeitos relativísticos:
+
+- **Desvio Doppler** — O lado do disco que se aproxima da câmera emite luz comprimida (azulada e mais brilhante); o lado que se afasta emite luz esticada (avermelhada e mais escura).
+- **Redshift Gravitacional** — Fótons emitidos mais próximos ao horizonte perdem energia ao escapar do campo gravitacional intenso, tornando as regiões internas mais vermelhas.
+- **Disco Volumétrico** — Em vez de detecção por cruzamento de plano (disco infinitamente fino), a emissividade é acumulada ao longo do caminho do raio dentro do volume do disco, produzindo bordas suaves e múltiplas camadas sobrepostas.
+
+### 4. Renderização OpenGL (CUDA-GL Interop)
+No modo interativo, o kernel CUDA escreve os pixels **diretamente na textura OpenGL** via `cudaSurfaceObject_t`, evitando qualquer transferência GPU→CPU. A textura é então renderizada por um quad em tela cheia com shaders GLSL simples.
+
+---
 
 ## ✨ Funcionalidades
 
-- Simulação física de trajetórias de luz sob lente gravitacional intensa
-- Aceleração massiva via CUDA (paralelismo por pixel)
-- Renderização em tempo real com OpenGL + GLFW
-- Fundo estelar realista carregado de um starmap real
-- Ruído de Perlin para textura do disco de acreção
-- Suporte a múltiplas resoluções de saída
-- Exportação de frames em PNG via LodePNG
+- Integração RK4 de geodésicas nulas na métrica de Schwarzschild
+- Paralelismo massivo por pixel via CUDA (Persistent Threads no modo interativo)
+- Renderização em tempo real via OpenGL + GLFW com CUDA-GL Interop
+- Fundo estelar realista carregado de um starmap equirretangular
+- Ruído de Perlin para textura turbulenta do disco de acreção
+- Disco volumétrico com emissividade acumulada ao longo do raio
+- Desvio Doppler relativístico e redshift gravitacional por pixel
+- Passo adaptativo: step reduzido automaticamente próximo ao horizonte
+- Early exit por parâmetro de impacto (raios que definitivamente escapam)
+- Monitoramento em tempo real de temperatura de GPU/CPU no terminal
+- Dois modos de saída: janela OpenGL interativa ou exportação PNG
+- Suporte a múltiplas resoluções (800×600 até 4096×2048)
+- Multiplataforma: **Linux**, **macOS** (Intel) e **Windows**
+
+---
 
 ## 📁 Estrutura do Projeto
- 
+
 ```
 Black_Hole/
 ├── cuda/
-│   ├── geodesic.cu        # Integração numérica das geodésicas na GPU
-│   ├── comms.cu           # Comunicação host ↔ device
-│   └── feedbacks.cu       # Feedback de parâmetros físicos
+│   ├── geodesic.cu        # Kernel principal: integração RK4 + composição de cor
+│   ├── geodesic.cuh       # Header do kernel (struct Rays, constantes físicas)
+│   ├── comms.cu           # activateSetFlags, getStateCountsPtr
+│   ├── comms.cuh          # Declarações de comms
+│   └── feedbacks.cu       # Estimativa de tempo e warmup do driver CUDA
 ├── shaders/
-│   ├── *.vert             # Vertex shaders GLSL
-│   └── *.frag             # Fragment shaders GLSL
+│   ├── display.vert       # Quad em tela cheia (procedural, sem VBO)
+│   └── display.frag       # Amostragem da textura CUDA→OpenGL
 ├── src/
-│   ├── engine.cpp/.hpp    # Loop principal de renderização OpenGL
-│   ├── host.cpp           # Interface CPU com os kernels CUDA
-│   ├── constants.hpp      # Constantes físicas (Schwarzschild, etc.)
-│   ├── starmap.cpp/.hpp   # Carregamento e consulta do mapa estelar
-│   ├── perlin.cpp/.hpp    # Geração de ruído de Perlin
-│   ├── temp_and_time.cpp  # Temperatura e timing da simulação
-│   └── lodepng.cpp        # Codificação/decodificação PNG
-├── main.cpp               # Ponto de entrada: configuração de câmera e engine
-├── png.cpp                # Utilitários auxiliares de imagem
-├── CMakeLists.txt
+│   ├── engine.cpp/.hpp    # Loop principal OpenGL, CUDA-GL Interop, callbacks de câmera
+│   ├── host.cpp           # Ponte CPU→GPU: converte vetores GLM → double3, chama launchRaytrace
+│   ├── constants.hpp      # Parâmetros globais: resolução, steps, fatores físicos
+│   ├── distribution.hpp   # StateHeatmap: display de progresso em tempo real (std::thread)
+│   ├── starmap.cpp/.hpp   # Carregamento e textura CUDA do mapa estelar
+│   ├── perlin.cpp/.hpp    # Carregamento e textura CUDA do ruído de Perlin
+│   ├── temp_and_time.cpp  # Leitura de temperatura GPU/CPU, helpers de tempo
+│   └── lodepng.cpp/.h     # Codificação PNG (LodePNG)
+├── data/
+│   ├── starmap.png        # Mapa estelar equirretangular (não incluído no repo)
+│   └── perlin.txt         # Dados de ruído pré-computados (não incluído no repo)
+├── main.cpp               # Modo interativo: configura câmera e chama engineRun()
+├── png.cpp                # Modo exportação: renderiza e salva PNG via LodePNG
+├── CMakeLists.txt         # Build system (CMake 3.24+)
+├── CMakePresets.json      # Presets para Linux, macOS e Windows
 └── LICENSE
 ```
 
+---
+
 ## 🛠️ Pré-requisitos
- 
-Certifique-se de ter instalado:
- 
+
+É necessária uma **GPU NVIDIA** com suporte a CUDA. A arquitetura é detectada automaticamente via `CUDA_ARCHITECTURES native`.
+
+### Dependências comuns
+
 | Dependência | Versão mínima | Finalidade |
 |---|---|---|
-| GCC / Clang | C++17 | Compilação do código host |
-| NVCC (CUDA Toolkit) | 11.0+ | Compilação dos kernels GPU |
-| CMake | 3.24+ | Sistema de build |
-| OpenGL | 3.3+ | Renderização |
-| GLEW | qualquer | Extensões OpenGL |
-| GLFW3 | 3.x | Janela e contexto OpenGL |
-| GLM | qualquer | Matemática 3D (vetores/matrizes) |
- 
-> **Nota:** É necessária uma GPU NVIDIA com suporte a CUDA. A arquitetura é detectada automaticamente via `CUDA_ARCHITECTURES native`.
+| CUDA Toolkit | 11.0+ | Compilação dos kernels GPU |
+| CMake | 3.24+ | Build system |
+| OpenGL | 3.3 Core | Renderização |
+| GLEW | qualquer | Carregamento de extensões OpenGL |
+| GLFW3 | 3.4+ | Janela e contexto OpenGL |
+| GLM | qualquer | Matemática 3D |
+
+### Por plataforma
+
+<details>
+<summary><b>Linux (Ubuntu/Debian)</b></summary>
+
+```bash
+sudo apt install cmake ninja-build libglfw3-dev libglew-dev libglm-dev
+# CUDA Toolkit: https://developer.nvidia.com/cuda-downloads
+```
+
+Compilador: GCC ou Clang com suporte a C++17.
+</details>
+
+<details>
+<summary><b>macOS (Intel)</b></summary>
+
+```bash
+brew install cmake ninja glfw glew glm
+# CUDA Toolkit: https://developer.nvidia.com/cuda-downloads
+```
+
+> **Apple Silicon (M1/M2/M3):** não suportado. A NVIDIA encerrou o suporte ao CUDA em macOS a partir do macOS Mojave para placas externas, e o Apple Silicon não possui suporte a CUDA de forma alguma.
+
+Compilador: Clang (Xcode Command Line Tools).
+</details>
+
+<details>
+<summary><b>Windows</b></summary>
+
+1. Instale o [Visual Studio 2019 ou 2022](https://visualstudio.microsoft.com/) com o workload **"Desenvolvimento para Desktop com C++"**
+2. Instale o [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads)
+3. Instale as dependências via **vcpkg**:
+
+```powershell
+vcpkg install glfw3 glew glm --triplet x64-windows
+```
+
+4. Configure o CMake com a integração do vcpkg:
+
+```powershell
+cmake --preset windows-vs2022 -DCMAKE_TOOLCHAIN_FILE="C:/vcpkg/scripts/buildsystems/vcpkg.cmake"
+```
+
+Compilador: MSVC (obrigatório para CUDA no Windows — MinGW não é suportado pelo NVCC).
+</details>
+
+---
 
 ## 🚀 Build & Instalação
- 
+
+### Usando CMakePresets (recomendado)
+
 ```bash
-# 1. Clone o repositório
+# Linux
+cmake --preset linux-release
+cmake --build --preset linux-release
+
+# macOS (Intel)
+cmake --preset macos-release
+cmake --build --preset macos-release
+```
+
+```powershell
+# Windows (PowerShell)
+cmake --preset windows-vs2022
+cmake --build --preset windows-vs2022
+```
+
+### Manual
+
+```bash
 git clone https://github.com/LuisEd83/Black_Hole.git
 cd Black_Hole
- 
-# 2. Crie o diretório de build
-mkdir build && cd build
- 
-# 3. Configure com CMake
-cmake ..
- 
-# 4. Compile
-cmake --build . --config Release
- 
-# 5. Execute (a partir da raiz do projeto ou do diretório de saída)
-./BlackHoleCUDA
+
+cmake -B build -S .
+cmake --build build --config Release
 ```
- 
-> Os shaders são copiados automaticamente para o diretório de saída pelo CMake após o build.
- 
- ## 🎮 Uso
 
-Ao executar o binário, uma janela OpenGL abrirá exibindo a simulação em tempo real. A câmera é posicionada automaticamente a partir dos parâmetros definidos em `main.cpp`.
+> Os shaders e os arquivos de `data/` são copiados automaticamente para o diretório do executável pelo CMake após o build.
 
-Os dados de suporte necessários devem estar presentes em:
- 
+---
+
+## 🎮 Uso
+
+### Modo interativo (padrão)
+
+Execute o binário gerado. Uma janela OpenGL abrirá exibindo a simulação em tempo real:
+
+```bash
+./build/BlackHoleCUDA       # Linux / macOS
+build\Release\BlackHoleCUDA.exe  # Windows
+```
+
+**Controles:**
+
+| Entrada | Ação |
+|---|---|
+| Arrastar mouse (botão esquerdo) | Orbitar câmera |
+| Scroll do mouse | Zoom (ajusta raio orbital) |
+| `Esc` | Fechar |
+
+### Arquivos de dados necessários
+
+Os seguintes arquivos devem estar presentes em `data/` (relativo ao executável):
+
 ```
 data/
-├── starmap.png   #Mapa estelar de fundo
-└── perlin.txt    #Dados de ruído pré-computados
+├── starmap.png   # Mapa estelar equirretangular (ex: ESA Gaia DR2)
+└── perlin.txt    # Dados de ruído de Perlin pré-computados
 ```
+
+---
 
 ## ⚙️ Configuração
 
-As principais variáveis de controle estão localizadas em `src/constants.hpp` e no início de `main.cpp`:
+As principais variáveis de controle estão em `src/constants.hpp`:
 
-**Renderização** - Altera entre a simulação em tempo real e a renderização de uma imagem estática do tipo .png. Elas podem ser alterados diretamente em `src/constants.hpp`
-```hpp
-const bool is_gl = false; //Neste caso está habilitado a renderização de imagem estática
+### Modo de saída
+
+```cpp
+const bool is_gl = true;   // true  → janela OpenGL interativa (main.cpp)
+                           // false → exportação PNG (png.cpp)
 ```
 
+> Para usar `is_gl = false`, é necessário compilar `png.cpp` como ponto de entrada no lugar de `main.cpp`.
 
-**Resolução de saída** — definida pela constante `BH::res`:
- 
+### Resolução
+
+```cpp
+const std::string res = "Minimal";  // define WIDTH e HEIGHT
+```
+
 | Valor | Resolução |
 |---|---|
 | `"Minimal"` | 800 × 600 |
@@ -165,33 +267,52 @@ const bool is_gl = false; //Neste caso está habilitado a renderização de imag
 | `"UHD"` | 3840 × 2160 |
 | `"4K"` | 4096 × 2048 |
 
-**Câmera** — os parâmetros de posição, alvo e campo de visão podem ser ajustados diretamente em `main.cpp`:
- 
+### Parâmetros físicos
+
 ```cpp
-const double graus          = 10.0;   // azimute da câmera
-const double elevation_angle = 5.0;   // ângulo de elevação
-float fov_y                 = 60.0f;  // campo de visão vertical
+constexpr int    MAX_STEPS      = 5000;   // iterações máximas por raio
+constexpr double STEP_FACTOR    = 0.5;    // tamanho do passo em unidades de rs
+constexpr double IMPACT_CUTOFF  = 7.5;    // threshold de escape antecipado
+constexpr double ADAPTIVE_FACTOR = 5.0;  // raio (em rs) em que o step começa a diminuir
+constexpr double EMISSIVITY_RATE = 0.001; // limiar mínimo de emissividade do disco
 ```
- 
+
+### Câmera (`main.cpp`)
+
+```cpp
+const double cam_dist      = RS * BH::factor;  // distância da câmera ao buraco negro
+float fov_y                = 60.0f;            // campo de visão vertical (graus)
+glm::vec3 target           = glm::vec3(...);   // ponto para onde a câmera aponta
+```
+
+---
+
 ## 🗺️ Roadmap
- 
+
+- [x] Integração RK4 de geodésicas nulas (Schwarzschild)
+- [x] Disco de acreção volumétrico com emissividade acumulada
+- [x] Desvio Doppler relativístico e redshift gravitacional
+- [x] CUDA-GL Interop (zero cópia GPU→CPU no modo interativo)
+- [x] Passo adaptativo próximo ao horizonte de eventos
+- [x] Monitoramento de temperatura GPU/CPU em tempo real
+- [x] Suporte multiplataforma: Linux, macOS, Windows
+- [ ] Suporte à métrica de Kerr (buraco negro em rotação)
 - [ ] Interface interativa para ajuste de parâmetros em tempo real
-- [ ] Suporte a rotação do buraco-negro (métrica de Kerr)
 - [ ] Exportação de vídeo frame-a-frame
-- [ ] Desvio para o vermelho (redshift) gravitacional nos pixels do disco
-- [ ] Multithreading CPU para pré-processamento de dados
 - [ ] Empacotamento Docker para build reprodutível
 
+---
+
 ## 📚 Referências
- 
+
 - [James, O. et al. (2015) — *Gravitational lensing by spinning black holes in astrophysics, and in the movie Interstellar*](https://iopscience.iop.org/article/10.1088/0264-9381/32/6/065001)
 - [Luminet, J.-P. (1979) — *Image of a spherical black hole with thin accretion disk*](https://www.aanda.org/articles/aa/full_html/2019/01/aa14506-19/aa14506-19.html)
 - [Misner, Thorne & Wheeler — *Gravitation* (1973)](https://press.princeton.edu/books/hardcover/9780691177793/gravitation)
 - [CUDA C++ Programming Guide — NVIDIA](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)
-- [LearnOpenGL — Ray Tracing concepts](https://learnopengl.com/)
+- [LearnOpenGL](https://learnopengl.com/)
+
 ---
- 
+
 ## 📄 Licença
- 
+
 Distribuído sob a licença **MIT**. Consulte o arquivo [`LICENSE`](./LICENSE) para mais detalhes.
- 

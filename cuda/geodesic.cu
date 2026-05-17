@@ -8,7 +8,6 @@
 
 #include <cmath>
 #include <iostream>
-#include <unistd.h>
 
 
 extern __device__ unsigned int d_state_counts[SH_NUM_STATES];
@@ -1024,27 +1023,22 @@ void launchRaytrace( bool is_gl, void* pixels,
 
         cudaSurfaceObject_t surface;
         cudaCreateSurfaceObject(&surface, &res_desc);
-    
-        unsigned char* d_pixels = nullptr;
-        cudaMalloc(&d_pixels, nbytes);
-        cudaMemset(d_pixels, 0, nbytes);
-        
-    
+
         int* d_counter;
         cudaMalloc(&d_counter, sizeof(int));
-        cudaMemset(d_counter, 0, sizeof(int)); 
+        cudaMemset(d_counter, 0, sizeof(int));
 
         dim3 numBlocksPersis(96);
         dim3 blockSizePersis(256);
 
-            raytraceKernel<<<numBlocksPersis, blockSizePersis>>>(is_gl ? nullptr : d_pixels, is_gl,  
-                                                                 WIDTH, HEIGHT,
-                                                                 pos, fwd, right, up,
-                                                                 fov_y, rs, starmap, perlin, 
-                                                                 surface, d_counter 
-                                                                 );
+        raytraceKernel<<<numBlocksPersis, blockSizePersis>>>(nullptr, is_gl,
+                                                             WIDTH, HEIGHT,
+                                                             pos, fwd, right, up,
+                                                             fov_y, rs, starmap, perlin,
+                                                             surface, d_counter
+                                                             );
 
-
+        cudaDeviceSynchronize();
         cudaFree(d_counter);
         cudaDestroySurfaceObject(surface);
 

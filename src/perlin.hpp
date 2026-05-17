@@ -1,15 +1,8 @@
 #pragma once
+#include "platform.hpp"
 
-#include <cuda_runtime.h>
-#include <texture_types.h>
-
-// objeto de textura - criado por perlinLoad(), usado pelo kernel
+// Texture handle — CUDA object on Linux/Windows, CpuTexture* cast on macOS
 extern cudaTextureObject_t perlin;
 
-// carrega data/disk3d.txt e cria a textura CUDA
-// retorna false se falha
-
 bool perlinLoad(const char* path);
-
-// libera memória
 void perlinFree();

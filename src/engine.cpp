@@ -7,15 +7,21 @@
 #include <glm/gtc/matrix_transform.hpp>
  
 #include <iostream>
-#include <texture_types.h>
 #include <vector>
 #include <string>
 #include <fstream>
 #include <sstream>
 #include <chrono>
 
-#include <cuda_runtime.h>
-#include <cuda_gl_interop.h>
+#include "platform.hpp"
+#if BH_CPU_BACKEND
+#include <thread>
+#include <atomic>
+#include "cpu_raytrace.hpp"
+#include "starmap.hpp"
+#include "perlin.hpp"
+static const double rs_engine = 2.0 * G * BH_MASS / (c * c);
+#endif
 
 using namespace std;
 using namespace glm;
@@ -59,7 +65,9 @@ void raytraceCUDA(bool is_sim, void* pixels,
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+#if !BH_CPU_BACKEND
 static cudaGraphicsResource_t cuda_tex_resource = nullptr;
+#endif
 
 static string loadShaders(const string& path){
     
@@ -274,8 +282,6 @@ void engineRun(const EngineConfig& config){
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // passo 1: iniciar GLFW
-    glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_X11);
-    
     if(!glfwInit()){
         cerr << "[ENGINE]: Falha ao iniciar GLFW.\n";
         return;
@@ -285,6 +291,9 @@ void engineRun(const EngineConfig& config){
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+#ifdef __APPLE__
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+#endif
     
     GLFWwindow* window = glfwCreateWindow(config.WIDTH, config.HEIGHT, config.title.c_str(), nullptr, nullptr);
     
@@ -351,9 +360,11 @@ void engineRun(const EngineConfig& config){
     GLuint program  = buildProgram(vert_str, frag_str);
     GLuint textures = makeGLFrameTexture(config.WIDTH,  config.HEIGHT);
     
+#if !BH_CPU_BACKEND
     cudaGraphicsGLRegisterImage(&cuda_tex_resource, textures,
                              GL_TEXTURE_2D,
                              cudaGraphicsRegisterFlagsSurfaceLoadStore);
+#endif
 
     // criaçao do VAO vazio
     GLuint VAO;
@@ -371,10 +382,16 @@ void engineRun(const EngineConfig& config){
 
     vector<unsigned char>pixels;
     pixels.resize(config.WIDTH * config.HEIGHT * 3); // 3 canais de RGB
-    
+
+#if BH_CPU_BACKEND
+    std::thread        cpu_thread;
+    std::atomic<bool>  cpu_done{true};
+    bool               cpu_upload_pending = false;
+    int                uploaded_tiles     = 0;
+#endif
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // passo 7: loop principal  
+    // passo 7: loop principal
 
     
     using Clock = chrono::high_resolution_clock;
@@ -387,64 +404,99 @@ void engineRun(const EngineConfig& config){
         glfwPollEvents();
         
         // relança kernel se deu will_rerender
-                    
-        if(camera.will_rerender){
 
-            vec3 pos, fwd, right, up;
+#if BH_CPU_BACKEND
+        // CPU path: render em thread de fundo, tiles enviados progressivamente ao GL
 
-           /*if(config.use_direct_vectors && frame_count == 0){
+        // faz upload dos tiles concluídos desde o último frame
+        if (cpu_upload_pending) {
+            TileProgress& tp = getTileProgress();
 
-                pos   = config.cam_pos;
-                fwd   = config.cam_fwd;
-                right = config.cam_right;
-                up    = config.cam_up_vec;
+            // IMPORTANTE: ler render_done ANTES de ready.
+            // Se render_done=true, a garantia seq_cst assegura que
+            // tp.done já reflete todos os tiles — sem race condition.
+            bool render_done = cpu_done.load();
+            int  ready       = tp.done.load(std::memory_order_acquire);
 
-            } else {
+            glBindTexture(GL_TEXTURE_2D, textures);
+            glPixelStorei(GL_UNPACK_ROW_LENGTH, config.WIDTH);
+            while (uploaded_tiles < ready) {
+                // tile_done_order[uploaded_tiles] diz qual tile físico terminou
+                // nesta posição — corrige o problema de work-stealing fora de ordem.
+                int tile_idx = tp.tile_done_order[uploaded_tiles];
+                int tx = tile_idx % tp.tiles_x;
+                int ty = tile_idx / tp.tiles_x;
+                int x0 = tx * tp.tile_w;
+                int y0 = ty * tp.tile_h;
+                int x1 = std::min(x0 + tp.tile_w, config.WIDTH);
+                int y1 = std::min(y0 + tp.tile_h, config.HEIGHT);
+                glTexSubImage2D(GL_TEXTURE_2D, 0,
+                                x0, y0, x1 - x0, y1 - y0,
+                                GL_RGB, GL_UNSIGNED_BYTE,
+                                pixels.data() + (y0 * config.WIDTH + x0) * 3);
+                ++uploaded_tiles;
             }
-            */
+            glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+            glBindTexture(GL_TEXTURE_2D, 0);
 
+            if (render_done) {
+                if (cpu_thread.joinable()) cpu_thread.join();
+                // Safety-net: upload completo do frame para garantir que nenhum tile ficou faltando
+                glBindTexture(GL_TEXTURE_2D, textures);
+                glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
+                                config.WIDTH, config.HEIGHT,
+                                GL_RGB, GL_UNSIGNED_BYTE, pixels.data());
+                glBindTexture(GL_TEXTURE_2D, 0);
+                std::cout << "[render] completo — " << tp.total << " tiles\n";
+                cpu_upload_pending = false;
+                uploaded_tiles     = 0;
+            }
+        }
+
+        // câmera mudou e não há render em andamento → lança thread
+        if (camera.will_rerender && cpu_done.load()) {
+            vec3 pos, fwd, right, up;
+            camera.getVectors(pos, fwd, right, up);
+            camera.will_rerender = false;
+            cpu_done.store(false);
+            cpu_upload_pending = true;
+            uploaded_tiles     = 0;
+            double3 c_pos   = { (double)pos.x,   (double)pos.y,   (double)pos.z   };
+            double3 c_fwd   = { (double)fwd.x,   (double)fwd.y,   (double)fwd.z   };
+            double3 c_right = { (double)right.x, (double)right.y, (double)right.z };
+            double3 c_up    = { (double)up.x,    (double)up.y,    (double)up.z    };
+            int   w   = config.WIDTH;
+            int   h   = config.HEIGHT;
+            float fov = config.fov_y;
+            if (cpu_thread.joinable()) cpu_thread.join();
+            cpu_thread = std::thread([=, &pixels, &cpu_done]() {
+                launchRaytraceCPU(pixels.data(), w, h,
+                                  c_pos, c_fwd, c_right, c_up,
+                                  fov, rs_engine, starmap, perlin);
+                cpu_done.store(true);
+            });
+        }
+
+#else
+        // CUDA backend: kernel escreve direto na textura GL via interop
+        if (camera.will_rerender) {
+            vec3 pos, fwd, right, up;
             camera.getVectors(pos, fwd, right, up);
 
-            // mapeia textura GL para CUDA
             cudaGraphicsMapResources(1, &cuda_tex_resource, 0);
-            
+
             cudaArray_t cuda_array;
             cudaGraphicsSubResourceGetMappedArray(&cuda_array, cuda_tex_resource, 0, 0);
 
-
-            // step 2: de WIDTH, HEIGHT, render em menor res: rW, rH
-            // passa o array para raytraceCUDA — kernel escreve direto
             raytraceCUDA(BH::is_gl, cuda_array,
                          config.WIDTH, config.HEIGHT,
                          pos, fwd, right, up,
                          config.fov_y);
 
-            // desmapeia antes do GL desenhar
             cudaGraphicsUnmapResources(1, &cuda_tex_resource, 0);
-
-            // sem glTexSubImage2D — kernel já escreveu na textura
             camera.will_rerender = false;
         }
-
-            /*
-        std::vector<unsigned char> pixels(config.WIDTH * config.HEIGHT * 3);
-        raytraceCUDA(BH::is_gl, pixels.data(), 
-                     config.WIDTH, config.HEIGHT, 
-                     pos, fwd, right, up,
-                     config.fov_y);
-
-            
-
-            glBindTexture(GL_TEXTURE_2D, textures);
-            glTexSubImage2D(GL_TEXTURE_2D, 0,
-                            0, 0, config.WIDTH, config.HEIGHT,
-                            GL_RGB, GL_UNSIGNED_BYTE,
-                            pixels.data());
-
-            glBindTexture(GL_TEXTURE_2D, 0);
-
-            camera.will_rerender = false;
-            */
+#endif
         
         glClear(GL_COLOR_BUFFER_BIT);
         glUseProgram(program);
@@ -463,8 +515,18 @@ void engineRun(const EngineConfig& config){
 
             float fps = frame_count / elapsed_time;
             string title = config.title + "  |  " + to_string(int(fps)) + " fps";
+#if BH_CPU_BACKEND
+            if (cpu_upload_pending) {
+                TileProgress& tp = getTileProgress();
+                int done_tiles = tp.done.load(std::memory_order_relaxed);
+                int total_tiles = tp.total;
+                title = config.title + "  |  renderizando " +
+                        to_string(done_tiles) + "/" + to_string(total_tiles) +
+                        " tiles  |  " + to_string(int(fps)) + " fps";
+            }
+#endif
             glfwSetWindowTitle(window, title.c_str());
-        
+
             std::cout << "fps:" << fps << "\n";
 
             frame_count = 0;
@@ -477,6 +539,11 @@ void engineRun(const EngineConfig& config){
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // passo 8: limpeza dos dados se !glfwWindowShouldClose
     
+
+#if BH_CPU_BACKEND
+    getTileProgress().stop.store(true, std::memory_order_relaxed);
+    if (cpu_thread.joinable()) cpu_thread.join();
+#endif
 
     glDeleteTextures(1, &textures);
     glDeleteProgram(program);

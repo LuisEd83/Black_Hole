@@ -5,7 +5,7 @@ using Clock = std::chrono::high_resolution_clock;
 
 std::string printNow(){
 
-    auto now = Clock::now();
+    auto now = std::chrono::system_clock::now();
     std::time_t t = std::chrono::system_clock::to_time_t(now);
     std::tm tm = *std::localtime(&t);
         
@@ -23,8 +23,9 @@ double elapsedMs(Clock::time_point t0, Clock::time_point t1) {
 
 std::string estimatedEnd(Clock::time_point t0, double duration_ms){
 
-    auto t_end = t0 + std::chrono::milliseconds((long long)duration_ms);
-    std::time_t t = Clock::to_time_t(t_end);
+    auto t_end = std::chrono::system_clock::now()
+               + std::chrono::milliseconds((long long)duration_ms);
+    std::time_t t = std::chrono::system_clock::to_time_t(t_end);
     std::tm tm = *std::localtime(&t);
     
     char buf[16];

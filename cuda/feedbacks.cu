@@ -8,7 +8,6 @@
 #include <cmath>
 #include <chrono>
 #include <cstdio>
-#include <unistd.h>
 
 using Clock = std::chrono::high_resolution_clock;
 
@@ -32,7 +31,7 @@ using Clock = std::chrono::high_resolution_clock;
 //@{
 
 
-static constexpr const char* FACTOR_FILE = "cuda/.bh_correction_factor";
+static constexpr const char* FACTOR_FILE = ".bh_correction_factor";
 static constexpr int FACTOR_WARMUP     = 5;   // ignora os N primeiros frames (GPU ainda aquecendo)
 static double dummy_ms = 0;
 
