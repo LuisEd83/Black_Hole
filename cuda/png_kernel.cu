@@ -1195,13 +1195,13 @@ __global__ void raytraceKernelPNG(  unsigned char* pixels,
             if(x == 0 && y == 0 && i < 3)
                 printf("step %d: theta=%.6f phi=%.6f dtheta=%.6e dphi=%.6e\n",
                i, s.theta, s.phi, s.dtheta, s.dphi);
-            */
             if(x == 0 && y == 0 && i == 0){
                 double rhs[6];
                 geodesicRHS(s, rhs, rs);
                 printf("canto rhs: %.4e %.4e %.4e %.4e %.4e %.4e\n",
                        rhs[0], rhs[1], rhs[2], rhs[3], rhs[4], rhs[5]);
             }
+            */
             // ─────────────────────────────────────────────────────────────────────────────────────────────────
         
         
@@ -1343,8 +1343,8 @@ __global__ void raytraceKernelPNG(  unsigned char* pixels,
             
             // ─── debug ────────────────────────────────────────────────────────────────────────────────────────────
             /*
-            */
             printf("Acesso no Early Exit de Raios.\n");
+            */
             // ─────────────────────────────────────────────────────────────────────────────────────────────────
 
             float u_tex = (float)(s.phi / (2.0 * PI)) + 0.5f;
