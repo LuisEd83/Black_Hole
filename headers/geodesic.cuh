@@ -2,6 +2,7 @@
 
 #include <cuda_runtime.h>
 
+#include "temp_and_time.hpp"
 #include "constants.hpp"
 #include "platform.hpp"
 #include "comms.cuh"

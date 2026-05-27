@@ -467,8 +467,9 @@ void engineRun(SimConfig& config){
 
 
     vector<unsigned char>pixels;
-    pixels.resize(config.WIDTH * config.HEIGHT * 3); // 3 canais de RGB
-    
+    pixels.resize(config.WIDTH * config.HEIGHT * 4); // 3 canais de RGB
+        
+       
     
     //@}
 
@@ -579,7 +580,8 @@ void engineRun(SimConfig& config){
             // sem glTexSubImage2D — kernel já escreveu na textura
             config.will_rerender = false;
         }
-
+    
+    /*
         // lê de volta 1 pixel da textura para confirmar que o dado chegou
     unsigned char pixel[4] = {0,0,0,0};
     glBindTexture(GL_TEXTURE_2D, textures);
@@ -594,6 +596,7 @@ void engineRun(SimConfig& config){
         glDeleteFramebuffers(1, &fbo);
     fprintf(stderr, "[GL] pixel(0,0) = %d %d %d %d\n", pixel[0], pixel[1], pixel[2], pixel[3]);
 
+    */
 
         glClear(GL_COLOR_BUFFER_BIT);
         glUseProgram(program);

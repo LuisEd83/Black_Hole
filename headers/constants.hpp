@@ -2,7 +2,9 @@
 
 #include <string>
 #include <cuda_runtime.h>
-   
+#include "../headers/lodepng.h"   
+
+using namespace std;
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //@{
@@ -25,6 +27,18 @@ inline auto ck = [](const char* tag){
     fprintf(stderr, "[CUDA] %s: %s\n", tag, cudaGetErrorString(err));
 };
 
+
+
+inline void test_png(vector<unsigned char>png_pixels, int WIDTH, int HEIGHT){
+
+    unsigned error = lodepng::encode("test.png", png_pixels, WIDTH, HEIGHT);
+        if (error)
+             fprintf(stderr, "\n◦ Erro de imagem: %s", lodepng_error_text(error));
+        else
+            fprintf(stderr, "\n◦ Imagem salva em 'test.png' (%llu MB)\n", png_pixels.size()/1024/1024);
+    }
+            
+
 //@}
 
 
@@ -32,7 +46,6 @@ inline auto ck = [](const char* tag){
 //@{
 
 
-using namespace std;
 
 namespace BH {
     
@@ -66,25 +79,25 @@ namespace BH {
 
     const string res = "Minimal";
     const bool is_sim = true;
-    const bool is_gl = false;
-    const bool is_persis = false;
+    const bool is_gl = true;
+    const bool is_persis = true;
 
     
     // ─────────────────────────────────────────────────────────────────────────────────────────────────
     // de natureza da simulação:
 
 
-    constexpr double CAMERA_FACTOR = 50.0;
-    constexpr double FOV_Y = 50.0;
+    constexpr double CAMERA_FACTOR = 10.0;
+    constexpr double FOV_Y = 80.0;
 
     constexpr double X_COEF = 1.0;
-    constexpr double Y_COEF = 1.1;
+    constexpr double Y_COEF = 1.2;
     constexpr double Z_COEF = 0.16;
         
     constexpr int MAX_STEPS = 10000;
-    constexpr double STEP_FACTOR = 0.1;
+    constexpr double STEP_FACTOR = 0.5;
     
-    constexpr double ESCAPE_FACTOR = 20.0;
+    constexpr double ESCAPE_FACTOR = 200.0;
  
 
     // ─────────────────────────────────────────────────────────────────────────────────────────────────
@@ -94,11 +107,11 @@ namespace BH {
     constexpr double IMPACT_CUTOFF  = 7.5;
     constexpr double MAX_STEPS_DIV  = 2.5;
     
-    constexpr double DISK_HEIGHT_SCALE = 0.10;
+    constexpr double DISK_HEIGHT_SCALE = 0.05;
     constexpr double DISK_OPACITY = 3.0;
     constexpr double EMISSION_SCALE = 2.5;
 
-    constexpr double ADAPTIVE_CLAMP = 0.001;
+    constexpr double ADAPTIVE_CLAMP = 0.01;
     constexpr double CLOSENESS = 5.0;
     
     constexpr double ADAPTIVE_FACTOR = 5.0;

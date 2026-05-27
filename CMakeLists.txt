@@ -112,7 +112,7 @@ else()
     )
 
     target_compile_options(BlackHoleCUDA PRIVATE
-        $<$<COMPILE_LANGUAGE:CUDA>:-G>
+         $<$<COMPILE_LANGUAGE:CUDA>:-lineinfo>
     )
 
 endif()

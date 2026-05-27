@@ -601,11 +601,12 @@ __device__ void pixelProcessGL( int x,
 
 
     for(int i = 0; i < MAX_STEPS; i++){
-        
-        if(x == 400 && y == 300 && i == 0)
-            printf("loop start: s.r=%.3e result=%d\n", s.r, (int)result);
-
-        
+            
+        if(s.r > disk_r2 * 1.2 && s.dr > 0.0 && i > 50){
+            // escapa
+            break;
+        }
+                       
         // ─────────────────────────────────────────────────────────────────────────────────────────────────
         // horizonte pré-step 
         if(s.r <= rs || s.r <= 0.0){
@@ -616,50 +617,6 @@ __device__ void pixelProcessGL( int x,
         }
          
 
-        // ─────────────────────────────────────────────────────────────────────────────────────────────────
-        // escape pré-step
-        //@{
-        /*
-            quando o raio escapa (r > escape_radius), o ângulo final (θ, φ) representa
-            a direção de onde a luz vem — que é a direção em que a câmera "vê" esse pixel.
-
-            converte (theta, phi) do ponto de fuga para UV do mapa equiretangular
-                → theta: [0, π]    → V: [0, 1]   (polo norte = 0, polo sul = 1)
-                → phi:   [-π, π]   → U: [0, 1]   (wrapa em 360°)
-         
-            O lensing gravitacional dobra os raios, então estrelas que "deveriam" estar
-            numa direção aparecem deslocadas — é exatamente o efeito visual de lensing.
-        */
-
-        if(s.r > escape_radius){
-            
-
-                // ─────────────────────────────────────────────────────────────────────────────────────────────────
-                /*
-                if(s.r/rs > 210)
-                    printf("[debug] - ESCAPE no step %d: r/rs=%.3f\n", i, s.r/rs);
-                */
-                // ─────────────────────────────────────────────────────────────────────────────────────────────────
-            
-
-            while(s.phi >  PI) s.phi -= 2.0 * PI;
-            while(s.phi < -PI) s.phi += 2.0 * PI;
-
-            float u_tex = (float)(s.phi / (2.0 * PI)) + 0.5f;   // [-π,π] → [0,1]
-            float v_tex = (float)(s.theta / PI);                  // [0,π]  → [0,1]
-
-            float4 color = tex2D<float4>(starmap, u_tex, v_tex);
-            
-            R = (unsigned char)(fminf(color.x * 255.0f, 255.0f));
-            G = (unsigned char)(fminf(color.y * 255.0f, 255.0f));
-            B = (unsigned char)(fminf(color.z * 255.0f, 255.0f));
-    
-            result = RayResult::ESCAPE;
-
-            break;
-        }
-        //@}
-        
             
         // ─────────────────────────────────────────────────────────────────────────────────────────────────
         // passo adaptativo 
@@ -687,7 +644,44 @@ __device__ void pixelProcessGL( int x,
         // ─────────────────────────────────────────────────────────────────────────────────────────────────
         // integrador rk4
         rk4Step(s, adaptive_step, rs);
- 
+        
+
+        // ─────────────────────────────────────────────────────────────────────────────────────────────────
+        // escape pré-step
+        //@{
+        /*
+            quando o raio escapa (r > escape_radius), o ângulo final (θ, φ) representa
+            a direção de onde a luz vem — que é a direção em que a câmera "vê" esse pixel.
+
+            converte (theta, phi) do ponto de fuga para UV do mapa equiretangular
+                → theta: [0, π]    → V: [0, 1]   (polo norte = 0, polo sul = 1)
+                → phi:   [-π, π]   → U: [0, 1]   (wrapa em 360°)
+         
+            O lensing gravitacional dobra os raios, então estrelas que "deveriam" estar
+            numa direção aparecem deslocadas — é exatamente o efeito visual de lensing.
+        */
+
+        if(s.r > escape_radius){
+            
+
+            if(s.phi >  PI) s.phi -= 2.0 * PI;
+            if(s.phi < -PI) s.phi += 2.0 * PI;
+
+            float u_tex = (float)(s.phi / (2.0 * PI)) + 0.5f;   // [-π,π] → [0,1]
+            float v_tex = (float)(s.theta / PI);                  // [0,π]  → [0,1]
+
+            float4 color = tex2D<float4>(starmap, u_tex, v_tex);
+            
+            R = (unsigned char)(fminf(color.x * 255.0f, 255.0f));
+            G = (unsigned char)(fminf(color.y * 255.0f, 255.0f));
+            B = (unsigned char)(fminf(color.z * 255.0f, 255.0f));
+    
+            result = RayResult::ESCAPE;
+
+            break;
+        }
+        //@}
+        
 
         // ─────────────────────────────────────────────────────────────────────────────────────────────────
         // horizonte pós-step 
@@ -834,8 +828,9 @@ __device__ void pixelProcessGL( int x,
                 break;
             }
 
+            //@}
+
         }
-        //@}
 
         y_prev = y_next;
 
@@ -875,9 +870,6 @@ __device__ void pixelProcessGL( int x,
 
         } else {
             
-            while(s.phi >  PI) s.phi -= 2.0 * PI;
-            while(s.phi < -PI) s.phi += 2.0 * PI;
-
             float u_tex = (float)(s.phi / (2.0 * PI)) + 0.5f;
             float v_tex = (float)(s.theta / PI);
 
@@ -901,20 +893,8 @@ __device__ void pixelProcessGL( int x,
 
     }
     //@} 
-    
+ 
 
-    // ─── debug ────────────────────────────────────────────────────────────────────────────────────────────
-    /*
-    if(x == 400 && y == 300){
-        printf("[RESULT_KERNEL] result=%d R=%d G=%d B=%d r0=%.3e rs=%.3e\n",
-            (int)result, R, G, B, r0, rs);
-
-    
-        //printf("[PIXEL] r0=%.3e rs=%.3e result=%d R=%d G=%d B=%d\n",
-        //r0, rs, (int)result, R, G, B);
-    }
-    */
-    // ─────────────────────────────────────────────────────────────────────────────────────────────────
 }
 
 
@@ -950,7 +930,7 @@ __global__  void raytraceKernelGL(  int WIDTH,
             y = idx / WIDTH;
             
             R = G = B = 0;
-
+            
             pixelProcessGL( x,y,
                             R,G,B,    
                             WIDTH, HEIGHT,
@@ -958,24 +938,10 @@ __global__  void raytraceKernelGL(  int WIDTH,
                             fov_y, rs,  
                             starmap, perlin
                         );
- 
-
-            // ─── debug ────────────────────────────────────────────────────────────────────────────────────────────
-            /*
-            */
-                if(x % 1200 == 0){
-                    printf("Reached result: %d, %d, %d\n", R, G, B );
-                }
-                if(x == 100 && y == 30)
-                    printf("[KERNEL] starmap=%llu perlin=%llu rs=%.3e\n",
-                        (unsigned long long)starmap,
-                        (unsigned long long)perlin, rs);
-            // ─────────────────────────────────────────────────────────────────────────────────────────────────
-
-            
-
+          
             if (x >= WIDTH || y >= HEIGHT || x < 0 || y < 0) return;
                 
+
             uchar4 pixel = make_uchar4(R, G, B, 255);
             surf2Dwrite(pixel, surface, x * 4, y);
 
@@ -990,6 +956,7 @@ __global__  void raytraceKernelGL(  int WIDTH,
         if (x >= WIDTH || y >= HEIGHT) return;
 
         R = G = B = 0;
+            
 
         pixelProcessGL( x, y, 
                         R, G, B,
@@ -998,20 +965,8 @@ __global__  void raytraceKernelGL(  int WIDTH,
                         fov_y, rs, 
                         starmap, perlin
                      );
+     
 
-        // ─── debug ────────────────────────────────────────────────────────────────────────────────────────────
-        /*
-            if(x % 1200 == 0){
-                printf("Reached result: %d, %d, %d\n", R, G, B );
-            }
-        */
-            if(x == 100 && y == 30)
-                printf("[KERNEL] starmap=%llu perlin=%llu rs=%.3e\n",
-                    (unsigned long long)starmap,
-                    (unsigned long long)perlin, rs);
-        // ─────────────────────────────────────────────────────────────────────────────────────────────────
-
-             
         if (x >= WIDTH || y >= HEIGHT || x < 0 || y < 0) return;
 
         uchar4 pixel = make_uchar4(R, G, B, 255);
@@ -1038,6 +993,10 @@ void launchGL(  cudaSurfaceObject_t surface,
                 cudaTextureObject_t perlin){
     
 
+    cudaEvent_t t_start, t_stop;
+    cudaEventCreate(&t_start);
+    cudaEventCreate(&t_stop);
+
     fprintf(stderr, "[PNG] launching: %dx%d rs=%.3e MAX_STEPS=%d STEP_FACTOR=%.4f\n",
         WIDTH, HEIGHT, rs, BH::MAX_STEPS, BH::STEP_FACTOR);
 
@@ -1051,7 +1010,8 @@ void launchGL(  cudaSurfaceObject_t surface,
         int* d_counter = nullptr;
         cudaMalloc(&d_counter, sizeof(int)); ck("d_pixel Malloc");
         cudaMemset(d_counter, 0, sizeof(int)); ck("d_pixel Memset");
-        
+
+        cudaEventRecord(t_start);
         printf("Entrando em PERSIS\n");
         raytraceKernelGL<<<numBlocks, blockSize>>>(
                 WIDTH, 
@@ -1063,11 +1023,19 @@ void launchGL(  cudaSurfaceObject_t surface,
                 perlin, 
                 surface, 
                 d_counter);
+            cudaEventRecord(t_stop);
+            cudaEventSynchronize(t_stop);   // bloqueia até o kernel terminar
+
+            float ms = 0.0f;
+            cudaEventElapsedTime(&ms, t_start, t_stop);
+            fprintf(stderr, "[TIMING] kernel: %.3f ms\n", ms);
 
         ck("Post-Kernel");
 
         cudaStreamSynchronize(0); ck("StreamSync");
 
+        cudaEventDestroy(t_start);
+        cudaEventDestroy(t_stop);
         cudaFree(d_counter); ck("Free d_counter");
     
     } else {

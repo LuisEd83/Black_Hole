@@ -174,7 +174,6 @@ int main() {
     
     glm::vec3 target    = glm::vec3(0.0f, 0.0f, 0.0f);
     glm::vec3 world_up  = glm::vec3(0.0f, 0.0f, 1.0f);
-    //glm::vec3 target    = glm::vec3(0.0f, 0.0f, 0.0f);
    
     glm::vec3 fwd   = glm::normalize(target - pos);
     glm::vec3 right = glm::normalize(glm::cross(fwd, world_up));
@@ -359,7 +358,6 @@ int main() {
         double3 c_right = { right.x, right.y, right.z };
         double3 c_up    = { up.x,    up.y,    up.z    };
             
-
            
         raytraceCUDA(   pixels.data(), 
                         0, 

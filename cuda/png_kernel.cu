@@ -46,7 +46,7 @@ __device__ void geodesicRHS(const Rays& s, double rhs[6], double rs) {
     // RHS[3] — aceleração radial
     rhs[3] =  - (rs / (2.0 * s.r * s.r)) * f * dt * dt
               + (rs / (2.0 * s.r * s.r * f)) * s.dr * s.dr
-              - s.r * (s.dtheta * s.dtheta + sin_t * sin_t * s.dphi * s.dphi);
+              + s.r * (s.dtheta * s.dtheta + sin_t * sin_t * s.dphi * s.dphi);
 
 
     // RHS[4] — aceleração angular polar (θ)
@@ -529,7 +529,6 @@ __device__  void pixelProcess(  int x,
     float accum_alpha = 0.0f;   // opacidade acumulada [0,1]
                                 // quando accum_alpha ≥ 1.0 → disco completamente opaco → break
     
-    //unsigned char R = 0, G = 0, B = 0;
 
     double y_prev = s.r * cos(s.theta);
     double y_next = y_prev;
@@ -557,11 +556,13 @@ __device__  void pixelProcess(  int x,
                         [4,6]: conservador, preserva Photon Ring e o disco é renderizado normalmente.
                         [6,8]: ainda mais conservador.
                         [10+]: o efeito do algoritmo some, quase tudo integra.
+    
+    */
     {
         double b = (s.E > 1e-10) ? fabs(s.L / s.E) : 1e30;
         const double b_crit = 2.598 * rs;  // 3√3/2 * rs
 
-        if(b > b_crit * BH::IMPACT_CUTOFF && s.r > rs * 3.0 && s.dr > 0.0){
+        if(b > b_crit * IMPACT_CUTOFF && s.r > rs * 3.0 && s.dr > 0.0){
 
             // raio escapa com certeza — amostra starmap direto
             float u_tex = (float)(s.phi / (2.0 * PI)) + 0.5f;
@@ -577,44 +578,29 @@ __device__  void pixelProcess(  int x,
             return;
         }
     }
-    */
     //@}
 
 
     for(int i = 0; i < MAX_STEPS; i++){
     
-
-            // ─── debug ────────────────────────────────────────────────────────────────────────────────────────────
-            /*
-            if(x == 0 && y == 0 && i < 3)
-                printf("step %d: theta=%.6f phi=%.6f dtheta=%.6e dphi=%.6e\n",
-               i, s.theta, s.phi, s.dtheta, s.dphi);
-            if(x == 0 && y == 0 && i == 0){
-                double rhs[6];
-                geodesicRHS(s, rhs, rs);
-                printf("canto rhs: %.4e %.4e %.4e %.4e %.4e %.4e\n",
-                       rhs[0], rhs[1], rhs[2], rhs[3], rhs[4], rhs[5]);
-            }
-            */
-            // ─────────────────────────────────────────────────────────────────────────────────────────────────
-        
-        
-        // ─────────────────────────────────────────────────────────────────────────────────────────────────
-        // timeout de segurança 
-        //@{
-        /*
-        */
-        if(i == MAX_STEPS - 1){
-            R = 255; G = 0; B = 0;   // vermelho = não resolveu
-            result = RayResult::NONE;
-            break;
-        }
-        //@}
-
             
+    // no início do loop, só para o pixel central
+            if(x == WIDTH/2 && y == HEIGHT/2 && i < 3){
+                double xc = s.r * sin(s.theta) * cos(s.phi);
+                double yc = s.r * sin(s.theta) * sin(s.phi);
+                double zc = s.r * cos(s.theta);
+                double rc = sqrt(xc*xc + yc*yc);
+                float emiss = diskEmissivity(rc, zc, disk_r1, disk_r2, DISK_HEIGHT_SCALE);
+                printf("\n\n\n\n\n\nstep %d: r/rs=%.3f  rc/rs=%.3f  zc/rs=%.3f  emiss=%.6f\n",
+                       i, s.r/rs, rc/rs, zc/rs, emiss);
+            }
+
+
+
+
         // ─────────────────────────────────────────────────────────────────────────────────────────────────
         // horizonte pré-step
-        if(s.r <= rs || s.r <= 0.0){
+        if(s.r <= rs || s.r <= 0.0 || s.r != s.r){
             R = G = B = 0;
             
             result = RayResult::HORIZON;
@@ -622,60 +608,7 @@ __device__  void pixelProcess(  int x,
         }
     
 
-        // ─────────────────────────────────────────────────────────────────────────────────────────────────
-        // escape pré-step 
-        //@{   
-        /*
-            quando o raio escapa (r > escape_radius), o ângulo final (θ, φ) representa
-            a direção de onde a luz vem — que é a direção em que a câmera "vê" esse pixel.
-
-            converte (theta, phi) do ponto de fuga para UV do mapa equiretangular
-                → theta: [0, π]    → V: [0, 1]   (polo norte = 0, polo sul = 1)
-                → phi:   [-π, π]   → U: [0, 1]   (wrapa em 360°)
-         
-            O lensing gravitacional dobra os raios, então estrelas que "deveriam" estar
-            numa direção aparecem deslocadas — é exatamente o efeito visual de lensing.
-        */
-
-        //if(s.r > escape_radius){
-        if(s.r > escape_radius || (s.dr > 0.0 && s.r > rs * 10.0 && i > 10)){
-
-
-            while(s.phi >  PI) s.phi -= 2.0 * PI;
-            while(s.phi < -PI) s.phi += 2.0 * PI;
-
-            float u_tex = (float)(s.phi / (2.0 * PI)) + 0.5f;   // [-π,π] → [0,1]
-            float v_tex = (float)(s.theta / PI);                  // [0,π]  → [0,1]
-            
-            float4 color = tex2D<float4>(starmap, u_tex, v_tex);
-
-                // ─── debug ────────────────────────────────────────────────────────────────────────────────────────────
-                /*
-                float4 color = tex2D<float4>(starmap, 0.5f, 0.5f);
-                if(x == WIDTH/2 && y == HEIGHT/2)
-                    printf("centro do mapa: rgba=%.4f %.4f %.4f\n", color.x, color.y, color.z);
-
-                */
-                // ─────────────────────────────────────────────────────────────────────────────────────────────────
-
-            R = (unsigned char)(fminf(color.x * 255.0f, 255.0f));
-            G = (unsigned char)(fminf(color.y * 255.0f, 255.0f));
-            B = (unsigned char)(fminf(color.z * 255.0f, 255.0f));
-                
-                // ─── debug ────────────────────────────────────────────────────────────────────────────────────────────
-                /*
-                    printf("u=%.4f v=%.4f  rgba=%.4f %.4f %.4f %.4f\n",
-                           u_tex, v_tex, color.x, color.y, color.z, color.w);
-                */
-                // ─────────────────────────────────────────────────────────────────────────────────────────────────
-
-            result = RayResult::ESCAPE;
-
-            break;
-        }
-        //@} 
-         
-             
+        
         // ─────────────────────────────────────────────────────────────────────────────────────────────────
         // passo adaptativo 
         //@{
@@ -699,13 +632,52 @@ __device__  void pixelProcess(  int x,
         }
     
         //@}
-
-         
+        
+            
+      
         // ─────────────────────────────────────────────────────────────────────────────────────────────────
         // integrador rk4
         rk4Step(s, adaptive_step, rs);
                 
+        
+        // ─────────────────────────────────────────────────────────────────────────────────────────────────
+        // escape pré-step 
+        //@{   
+        /*
+            quando o raio escapa (r > escape_radius), o ângulo final (θ, φ) representa
+            a direção de onde a luz vem — que é a direção em que a câmera "vê" esse pixel.
+
+            converte (theta, phi) do ponto de fuga para UV do mapa equiretangular
+                → theta: [0, π]    → V: [0, 1]   (polo norte = 0, polo sul = 1)
+                → phi:   [-π, π]   → U: [0, 1]   (wrapa em 360°)
+         
+            O lensing gravitacional dobra os raios, então estrelas que "deveriam" estar
+            numa direção aparecem deslocadas — é exatamente o efeito visual de lensing.
+        */
+        
+        //if(s.r > escape_radius || (s.dr > 0.0 && s.r > rs * 10.0 && i > 10)){
+        if(s.r > escape_radius){
+                
+
+            if(s.phi >  PI) s.phi -= 2.0 * PI;
+            if(s.phi < -PI) s.phi += 2.0 * PI;
             
+            float u_tex = (float)(s.phi / (2.0 * PI)) + 0.5f;   // [-π,π] → [0,1]
+            float v_tex = (float)(s.theta / PI);                  // [0,π]  → [0,1]
+            
+            float4 color = tex2D<float4>(starmap, u_tex, v_tex);
+
+            R = (unsigned char)(fminf(color.x * 255.0f, 255.0f));
+            G = (unsigned char)(fminf(color.y * 255.0f, 255.0f));
+            B = (unsigned char)(fminf(color.z * 255.0f, 255.0f));
+             
+            result = RayResult::ESCAPE;
+
+            break;
+        }
+        //@}
+             
+
         // ─────────────────────────────────────────────────────────────────────────────────────────────────
         // horizonte pós-step
         if(s.r <= rs || s.r <= 0.0 || s.r != s.r){
@@ -716,8 +688,8 @@ __device__  void pixelProcess(  int x,
             break;
         }
         y_next = s.r * cos(s.theta);
-        
      
+
         // ─────────────────────────────────────────────────────────────────────────────────────────────────
         // early exit por MAX_STEPS parcial 
         //@{
@@ -732,15 +704,8 @@ __device__  void pixelProcess(  int x,
                                 [10+]:  O algoritmo perde efeito.
         */
 
-        if(i > BH::MAX_STEPS / BH::MAX_STEPS_DIV && s.r > disk_r2 * 1.5 && s.dr > 0.0){
+        if(i > MAX_STEPS / MAX_STEPS_DIV && s.r > disk_r2 * 1.5 && s.dr > 0.0){
                 
-            
-            // ─── debug ────────────────────────────────────────────────────────────────────────────────────────────
-            /*
-            */
-            printf("Acesso no Early Exit de Raios.\n");
-            // ─────────────────────────────────────────────────────────────────────────────────────────────────
-
             float u_tex = (float)(s.phi / (2.0 * PI)) + 0.5f;
             float v_tex = (float)(s.theta / PI);
             float4 color = tex2D<float4>(starmap, u_tex, v_tex);
@@ -760,14 +725,7 @@ __device__  void pixelProcess(  int x,
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         // case: disco
         //@{
-        
-        // ─── debug ────────────────────────────────────────────────────────────────────────────────────────────
-        /*
-        */
-        printf("Acesso no disco volumétrico.\n");
-        // ─────────────────────────────────────────────────────────────────────────────────────────────────
-
-
+       
         // detecção por emissividade de disco volumétrico
         double x_cartesiano = s.r * sin(s.theta) * cos(s.phi);
         double y_cartesiano = s.r * sin(s.theta) * sin(s.phi);
@@ -863,7 +821,6 @@ __device__  void pixelProcess(  int x,
                 accum_alpha = 1.0f;
                 
                 result = RayResult::DISK;
-
                 break;
             }
             
@@ -895,31 +852,19 @@ __device__  void pixelProcess(  int x,
     */
     
     if (result == RayResult::NONE){ 
-        printf("\r Acesso na atribuição NONE → FALLBACK\n");
         result = RayResult::FALLBACK;
     }
        
-    if(result == RayResult::HORIZON){
-        printf("\r Acesso na atribuição 0,0,0 em HORIZON \n");
+    if(result == RayResult::HORIZON){   
         R = G = B = 0;
 
     } else if (result == RayResult::ESCAPE || result == RayResult::FALLBACK){
             
         if(result == RayResult::FALLBACK && s.r < rs * CLOSENESS){
             R = G = B = 0;
-            //printf("Acesso na atribuição 0,0,0 em CLOSE FALLBACK\n");
             
         } else {
-            
-            if(result == RayResult::FALLBACK && s.r > rs * CLOSENESS)
-                printf("\r Acesso na atribuição R,G,B em FAR FALLBACK\n");
-            else
-                int a;
-                //printf("\r Acesso na atribuição R,G,B em ESCAPE\n");
-
-            while(s.phi >  PI) s.phi -= 2.0 * PI;
-            while(s.phi < -PI) s.phi += 2.0 * PI;
-
+                
             float u_tex = (float)(s.phi / (2.0 * PI)) + 0.5f;
             float v_tex = (float)(s.theta / PI);
 
@@ -929,10 +874,15 @@ __device__  void pixelProcess(  int x,
             G = (unsigned char)(fminf(color.y * 255.0f, 255.0f));
             B = (unsigned char)(fminf(color.z * 255.0f, 255.0f));
                 
-            //if(x % 2 == 0)
-            //  printf("%d, %d, %d: FINAL\n\n", R,G,B);
         }
     }
+
+        if(x == WIDTH/2 && y == HEIGHT/2){
+            printf("\n\n\n\n\n\n\n\n\nfinal: result=%d  accum_alpha=%.6f  R=%d G=%d B=%d\n",
+               (int)result, accum_alpha, R, G, B);
+        }
+
+
 
     //if(result == RayResult::DISK
     if(accum_alpha > 0.0001f){
@@ -945,7 +895,8 @@ __device__  void pixelProcess(  int x,
         
     }
     //@} 
-        
+
+
 }
 //@}
 
@@ -968,13 +919,12 @@ __global__ void raytraceKernelPNG(  unsigned char* pixels,
 
     RayResult result = RayResult::NONE;
     int x = 0, y = 0;
-    //unsigned char R = 0, G = 0, B = 0;
+    unsigned char R = 0, G = 0, B = 0;
     
     x = blockIdx.x * blockDim.x + threadIdx.x;
     y = blockIdx.y * blockDim.y + threadIdx.y;
     if (x >= WIDTH || y >= HEIGHT) return;
     
-    /*
 
     pixelProcess(   x, y, 
                     R, G, B,
@@ -984,581 +934,13 @@ __global__ void raytraceKernelPNG(  unsigned char* pixels,
                     starmap, perlin,
                     result
                  );
-    */
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // posição da câmera em cartesianos
-    //@{
-
-    /*
-        alocando u,v, as coordenadas da tela.
-
-            → relaciona x,y à aspect_ratio e u,v.
-            → fov_y controla quantos graus temos visão. 
-    */
- 
-
-    float aspect     = float(WIDTH) / float(HEIGHT);
-    float tanHalfFov = tan(fov_y * 0.5f * (float)PI / 180.0f);
-    float u          = (2.0f * (x + 0.5f) / WIDTH  - 1.0f) * aspect * tanHalfFov;
-    float v          = (1.0f - 2.0f * (y + 0.5f) / HEIGHT) * tanHalfFov;
-    
-    /*
-        determinando a direção do raio:
-            
-            ◦ cálculo de onde apontam na tela: combinação linear,
-            ◦ se relacionam à [fwd, right, up]:
-                → fwd: centro da imagem (profundidade),
-                → right: deslocamento horizontal (u),
-                → up: deslocamento vertical (v).
-            ◦ normalização,
-            ◦ usa-se double para prezar pela precisão maior que o float.
-    */
-
-    // direção do raio: u*right + v*up + forward, normalizada
-    double dx = u * right.x + v * up.x + fwd.x;
-    double dy = u * right.y + v * up.y + fwd.y;
-    double dz = u * right.z + v * up.z + fwd.z;
-    double dlen = sqrt(dx*dx + dy*dy + dz*dz);
-    dx /= dlen; dy /= dlen; dz /= dlen;
-
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // transformando para coordenadas esféricas e inicializando Rays
-
-    /*
-        cartesianas → esféricas:
-
-            ◦ por mais incrível que pareça, pelo fato de que Schwarzschild é
-              modelado em esféricas, as equações são mais fáceis do que em cartesianas.
-            
-            ◦ relembrando:
-                → r     = distância radial ao centro do buraco negro
-                → theta = ângulo polar (0 = polo norte, π/2 = equador, π = polo sul)
-                → phi   = ângulo azimutal (rotação em torno do eixo z)
-    */
-
-    double ox = pos.x;
-    double oy = pos.y;
-    double oz = pos.z;
-
-    double r0     = sqrt(ox*ox + oy*oy + oz*oz);
-    double theta0 = acos(fmax(-1.0, fmin(1.0, oz / r0)));
-    double phi0   = atan2(oy, ox);
-        
-    if (theta0 > PI - 1e-6) theta0 = PI - 1e-6;
-
-    /* 
-        • coordenadas cartesianas → esféricas via Jacobiano da transformação esférica → cartesiana
-            → x = r * sin(θ) * cos(φ)
-            → y = r * sin(θ) * sin(φ)
-            → z = r * cos(θ)
-
-            ◦   Derivando cada componente em relação a (r, θ, φ) e invertendo, obtemos
-                como (dx, dy, dz) se traduz em (dr, dθ, dφ).
-            
-            ◦ st_safe protege dphi contra divisão por zero quando θ = 0 ou π (polos).
-    */
-
-    double st = sin(theta0), ct = cos(theta0), sp = sin(phi0), cp = cos(phi0);
-    double st_safe = (fabs(st) < 1e-12) ? 1e-12 : st;
-    
-    
-    /*
-        E = energia por unidade de massa (conservada porque a métrica não depende de t)
-        L = momento angular por unidade de massa (conservada porque não depende de φ)
-        ↓
-        são ctes, usadas a cada step do RK4 para calcular dt/dλ = E/f sem precisar rastrear o tempo coordenado t
-        
-
-        f0 = fator de Schwarzschild na posição inicial da câmera.
-        vmag é a magnitude da velocidade 3D no espaço de Schwarzschild.
-    */
-
-    Rays s;
-    s.r      = r0;
-    s.theta  = theta0;
-    s.phi    = phi0;
-    s.dr     =  st * cp * dx + st * sp * dy + ct * dz;
-    s.dtheta = (ct * cp * dx + ct * sp * dy - st * dz) / r0;
-    s.dphi   = (-sp * dx + cp * dy) / (r0 * st_safe);
-
-    double f0   = 1.0 - rs / r0;
-    double vmag = sqrt(s.dr*s.dr/f0
-                       + r0 * r0 * s.dtheta * s.dtheta
-                       + r0 * r0 * st_safe * st_safe * s.dphi * s.dphi );
-
-    s.L = r0 * r0 * st_safe * s.dphi;
-    s.E = f0 * vmag;
-        
-
-    //@}
-
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // parâmetros importantes para a simulação.
-    //@{
-    /*
-        info
-
-        step        —   tamanho de cada passo de integração em metros (rs * N). Menor = mais preciso, 
-                        bordas do disco mais suaves, photon ring mais visível, render mais lento. 
-                        Maior = mais rápido, mais aliasing, raios podem pular o horizonte. O passo adaptativo 
-                        já reduz automaticamente perto do horizonte.
-
-        MAX_STEPS       —   quantas iterações cada raio pode fazer. Determina se raios que orbitam múltiplas vezes 
-                            (photon ring) conseguem completar. Mais alto = photon ring aparece, render mais lento. 
-                            O tempo de render escala quase linearmente com MAX_STEPS para pixels que atingem o limite.
-
-        disk_r1         —   borda interna do disco em unidades de RS. Fisicamente deve ser ≥ 3 RS (ISCO — última órbita estável). 
-                            Menor que isso é ficção. Aumentar esconde a região mais brilhante próxima ao horizonte.
-
-        disk_r2         —   borda externa do disco. Controla o tamanho visual do disco. Maior = disco ocupa mais da tela. Se dist < disk_r2 
-                            a câmera está dentro do disco — resultado é tela laranja.
-
-        escape_radius   —   distância que o kernel considera "infinito". Deve ser maior que dist. Se muito pequeno, raios que deveriam chegar ao starmap são cortados antes. 
-                            RS * 200 é seguro para qualquer dist até RS * 100.
-
-        as variáveis abaixo são cruciais para o funcionamento do buraco negro.
-        elas estão descritas em sequência de aparição no loop.
-    */
-    
-    const double step = rs * STEP_FACTOR;
-    const double escape_radius = rs * ESCAPE_FACTOR;
-
-    const double disk_r1 = rs * 3.0;
-    const double disk_r2 = rs * 12.0;
-
-    float accum_r = 0.0f;       // canal vermelho acumulado
-    float accum_g = 0.0f;       // canal verde acumulado
-    float accum_b = 0.0f;       // canal azul acumulado
-    float accum_alpha = 0.0f;   // opacidade acumulada [0,1]
-                                // quando accum_alpha ≥ 1.0 → disco completamente opaco → break
-    
-    unsigned char R = 0, G = 0, B = 0;
-
-    double y_prev = s.r * cos(s.theta);
-    double y_next = y_prev;
-
-    //@}
-
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // loop em si
-    //@{
-
-    
-    // ─────────────────────────────────────────────────────────────────────────────────────────────────
-    // escape por parâmetro de impacto:
-    //@{
-    /*
-        
-        •   uma forma de Early Exit que analisa a relação entre o impacto da energia
-            de um raio para determinar se ele deve ser integrado. A lógica é: se um raio
-            tiver energia e momento angular, quando relacionados por 'b', maior que um threshold
-            predeterminado como LIMITE que um raio integrado tem, ele deve ser cortado.
-
-
-        IMPACT_CUTOFF:  [2,4]: vai de agressivo para moderado, cortando efeitos, sombra mais sólida.
-                        [4,6]: conservador, preserva Photon Ring e o disco é renderizado normalmente.
-                        [6,8]: ainda mais conservador.
-                        [10+]: o efeito do algoritmo some, quase tudo integra.
-    {
-        double b = (s.E > 1e-10) ? fabs(s.L / s.E) : 1e30;
-        const double b_crit = 2.598 * rs;  // 3√3/2 * rs
-
-        if(b > b_crit * BH::IMPACT_CUTOFF && s.r > rs * 3.0 && s.dr > 0.0){
-
-            // raio escapa com certeza — amostra starmap direto
-            float u_tex = (float)(s.phi / (2.0 * PI)) + 0.5f;
-            float v_tex = (float)(s.theta / PI);
-            float4 color = tex2D<float4>(starmap, u_tex, v_tex);
-
-            R = (unsigned char)(fminf(color.x * 255.0f, 255.0f));
-            G = (unsigned char)(fminf(color.y * 255.0f, 255.0f));
-            B = (unsigned char)(fminf(color.z * 255.0f, 255.0f));
-
-            result = RayResult::ESCAPE;
-            
-            return;
-        }
-    }
-    */
-    //@}
-
-
-    for(int i = 0; i < MAX_STEPS; i++){
-    
-
-            // ─── debug ────────────────────────────────────────────────────────────────────────────────────────────
-            /*
-            if(x == 0 && y == 0 && i < 3)
-                printf("step %d: theta=%.6f phi=%.6f dtheta=%.6e dphi=%.6e\n",
-               i, s.theta, s.phi, s.dtheta, s.dphi);
-            if(x == 0 && y == 0 && i == 0){
-                double rhs[6];
-                geodesicRHS(s, rhs, rs);
-                printf("canto rhs: %.4e %.4e %.4e %.4e %.4e %.4e\n",
-                       rhs[0], rhs[1], rhs[2], rhs[3], rhs[4], rhs[5]);
-            }
-            */
-            // ─────────────────────────────────────────────────────────────────────────────────────────────────
-        
-        
-        // ─────────────────────────────────────────────────────────────────────────────────────────────────
-        // timeout de segurança 
-        //@{
-        /*
-        */
-        if(i == MAX_STEPS - 1){
-            R = 255; G = 0; B = 0;   // vermelho = não resolveu
-            result = RayResult::NONE;
-            break;
-        }
-        //@}
-
-            
-        // ─────────────────────────────────────────────────────────────────────────────────────────────────
-        // horizonte pré-step
-        if(s.r <= rs || s.r <= 0.0){
-            R = G = B = 0;
-            
-            result = RayResult::HORIZON;
-            break;
-        }
-    
-
-        // ─────────────────────────────────────────────────────────────────────────────────────────────────
-        // escape pré-step 
-        //@{   
-        /*
-            quando o raio escapa (r > escape_radius), o ângulo final (θ, φ) representa
-            a direção de onde a luz vem — que é a direção em que a câmera "vê" esse pixel.
-
-            converte (theta, phi) do ponto de fuga para UV do mapa equiretangular
-                → theta: [0, π]    → V: [0, 1]   (polo norte = 0, polo sul = 1)
-                → phi:   [-π, π]   → U: [0, 1]   (wrapa em 360°)
-         
-            O lensing gravitacional dobra os raios, então estrelas que "deveriam" estar
-            numa direção aparecem deslocadas — é exatamente o efeito visual de lensing.
-        */
-
-        //if(s.r > escape_radius){
-        if(s.r > escape_radius || (s.dr > 0.0 && s.r > rs * 10.0 && i > 10)){
-
-
-            while(s.phi >  PI) s.phi -= 2.0 * PI;
-            while(s.phi < -PI) s.phi += 2.0 * PI;
-
-            float u_tex = (float)(s.phi / (2.0 * PI)) + 0.5f;   // [-π,π] → [0,1]
-            float v_tex = (float)(s.theta / PI);                  // [0,π]  → [0,1]
-            
-            float4 color = tex2D<float4>(starmap, u_tex, v_tex);
-
-                // ─── debug ────────────────────────────────────────────────────────────────────────────────────────────
-                /*
-                float4 color = tex2D<float4>(starmap, 0.5f, 0.5f);
-                if(x == WIDTH/2 && y == HEIGHT/2)
-                    printf("centro do mapa: rgba=%.4f %.4f %.4f\n", color.x, color.y, color.z);
-
-                */
-                // ─────────────────────────────────────────────────────────────────────────────────────────────────
-
-            R = (unsigned char)(fminf(color.x * 255.0f, 255.0f));
-            G = (unsigned char)(fminf(color.y * 255.0f, 255.0f));
-            B = (unsigned char)(fminf(color.z * 255.0f, 255.0f));
-                
-                // ─── debug ────────────────────────────────────────────────────────────────────────────────────────────
-                /*
-                    printf("u=%.4f v=%.4f  rgba=%.4f %.4f %.4f %.4f\n",
-                           u_tex, v_tex, color.x, color.y, color.z, color.w);
-                */
-                // ─────────────────────────────────────────────────────────────────────────────────────────────────
-
-            result = RayResult::ESCAPE;
-
-            break;
-        }
-        //@} 
-         
-             
-        // ─────────────────────────────────────────────────────────────────────────────────────────────────
-        // passo adaptativo 
-        //@{
-        /*
-            •   perto do horizonte (r < 5*limits), a curvatura do espaço-tempo cresce rapidamente.
-                um step fixo grande causaria que o raio "pulasse" o horizonte — de r=1.05*rs
-                para r=0.5*rs num único passo, sem o teste de captura disparar.
-            
-                o adaptive_step reduz linearmente com r: a 1*rs o passo é 1/5 do base_step.
-                o mínimo de adaptive_clamp * step evita que o loop fique infinitamente lento
-                para raios que raspam o horizonte.
-        */
-
-        double adaptive_step = step;
-
-        if(s.r < ADAPTIVE_FACTOR * rs){
-            adaptive_step = step * (s.r / (rs * ADAPTIVE_FACTOR));// escala linear: a 1rs → step/5
-
-            if(adaptive_step < step * ADAPTIVE_CLAMP) 
-                adaptive_step = step * ADAPTIVE_CLAMP;  // mínimo
-        }
-    
-        //@}
-
-         
-        // ─────────────────────────────────────────────────────────────────────────────────────────────────
-        // integrador rk4
-        rk4Step(s, adaptive_step, rs);
-                
-            
-        // ─────────────────────────────────────────────────────────────────────────────────────────────────
-        // horizonte pós-step
-        if(s.r <= rs || s.r <= 0.0 || s.r != s.r){
-            R = G = B = 0;
-                
-            result = RayResult::HORIZON;
-                
-            break;
-        }
-        y_next = s.r * cos(s.theta);
-        
-     
-        // ─────────────────────────────────────────────────────────────────────────────────────────────────
-        // early exit por MAX_STEPS parcial 
-        //@{
-        /* 
-            • se o raio já deu muitos steps, está longe do BH e se afastando → escapa
-                
-            
-            ◦ MAX_STEPS_DIV:    [2,4]:  Agressivo, corta a partir de metade à um quarto das iterações.
-                                        Talvez corte o Photon Ring.
-                                [4,6]:  Moderado.
-                                [6,8]:  Conservador, preserva Photon Ring.
-                                [10+]:  O algoritmo perde efeito.
-        */
-
-        if(i > BH::MAX_STEPS / BH::MAX_STEPS_DIV && s.r > disk_r2 * 1.5 && s.dr > 0.0){
-                
-            
-            // ─── debug ────────────────────────────────────────────────────────────────────────────────────────────
-            /*
-            printf("Acesso no Early Exit de Raios.\n");
-            */
-            // ─────────────────────────────────────────────────────────────────────────────────────────────────
-
-            float u_tex = (float)(s.phi / (2.0 * PI)) + 0.5f;
-            float v_tex = (float)(s.theta / PI);
-            float4 color = tex2D<float4>(starmap, u_tex, v_tex);
-
-            R = (unsigned char)(fminf(color.x * 255.0f, 255.0f));
-            G = (unsigned char)(fminf(color.y * 255.0f, 255.0f));
-            B = (unsigned char)(fminf(color.z * 255.0f, 255.0f));
-
-            result = RayResult::ESCAPE;
-
-            break;
-        }
-
-        //@}
-    
-
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        // case: disco
-        //@{
-        
-        // ─── debug ────────────────────────────────────────────────────────────────────────────────────────────
-        /*
-        */
-        printf("Acesso no disco volumétrico.\n");
-        // ─────────────────────────────────────────────────────────────────────────────────────────────────
-
-
-        // detecção por emissividade de disco volumétrico
-        double x_cartesiano = s.r * sin(s.theta) * cos(s.phi);
-        double y_cartesiano = s.r * sin(s.theta) * sin(s.phi);
-        double z_cartesiano = s.r * cos(s.theta);
-        
-        double r_current = sqrt(x_cartesiano*x_cartesiano +  y_cartesiano*y_cartesiano);
-        float emissividade = diskEmissivity(r_current, z_cartesiano, disk_r1, disk_r2, DISK_HEIGHT_SCALE);
-           
-
-        if(emissividade > EMISSIVITY_RATE){
-            
-
-            /*
-                Aqui usamos a composição de 3 efeitos físicos:
-
-                    → Perlin noise:     modula o brilho local — gás turbulento, não uniforme
-                    → Doppler shift:    assimetria orbital — lado se aproximando brilha mais
-                    → Redshift grav:    raios que saem de r pequeno perdem energia
-
-             
-                • O beaming concentra a emissão na direção do movimento:
-                    
-                    lado se aproximando → feixe comprimido → mais brilhante
-                    lado se afastando   → feixe dilatado   → mais escuro
-                
-
-                • Separamos os dois para controle visual independente:
-                    
-                    freq_effect  = doppler * rs_freq   → muda a cor
-                    beam_effect  = doppler^3            → muda o brilho
-
-
-                O expoente 3 vem de:
-                    → 1 fator de energia do fóton
-                    → fatores de aberração relativística (compressão do feixe)
-                    
-                    ◦ Fisicamente seria D^4 mas D^3 dá resultado visualmente mais equilibrado.
-
-            */
-            
-            float doppler = dopplerShift(r_current, s.phi, pos, rs);
-            float rs_freq = redShift(r_current, rs);
-            
-            float perlin_noise = perlinNoise(perlin, r_current, s.phi, disk_r1, disk_r2);
-            float base_brightness = 0.4f + 0.6f * perlin_noise;
-
-            float freq_effect = doppler * rs_freq;
-            float beam_effect = powf(fmaxf(doppler, 0.01f), 3.0f);
-            
-            float temp = (float)((r_current - disk_r1) / (disk_r2 - disk_r1));
-            float temp_norm = powf(1.0f - temp, 0.75f);
-           
-            float disk_r, disk_g, disk_b;
-            temperatureToColor(temp_norm, disk_r, disk_g, disk_b);
-       
-
-            // modula a cor base pelo shift de frequência
-            // freq > 1 → empurra para branco/azul (se aproximando)
-            // freq < 1 → empurra para vermelho (se afastando
-            if(freq_effect > 1.0f){
-
-                float blend = fminf((1.0f - freq_effect) / 1.5f, 1.0f);
-                
-                disk_g = disk_g + blend * (1.0f - disk_g);
-                disk_b = disk_b + blend * (1.0f - disk_b);
-
-            } else {
-
-                float blend = fminf((1.0f - freq_effect) / 0.8f, 1.0f);
-                
-                disk_r = disk_r + blend * 0.3f;
-                disk_g = disk_g + blend * (1.0f - disk_g);
-                disk_b = disk_b + blend * (1.0f - disk_b);
-
-            }
-
-            float intensity = emissividade * base_brightness * EMISSION_SCALE * beam_effect;
-            
-            float step_normalized = (float)(adaptive_step / (disk_r2 - disk_r1));
-            float contribution = intensity * step_normalized * DISK_OPACITY;
-            float remaining = 1.0f - accum_alpha;
-
-            accum_r     += disk_r * contribution * remaining;
-            accum_g     += disk_g * contribution * remaining;
-            accum_b     += disk_b * contribution * remaining;
-
-            accum_alpha += contribution * remaining;
-
-            result = RayResult::DISK;
-            
-            // disco completamente opaco → para de integrar
-            if (accum_alpha >= 1.0f){
-                accum_alpha = 1.0f;
-                
-                result = RayResult::DISK;
-
-                break;
-            }
-            
-            //@}
-
-        }
-
-        y_prev = y_next;
-    }
-    //@}
-    
-    
-    //  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // fallback:
-    //@{ 
-    /*
-        Após o loop, R=G=B=0 significa que nenhum dos casos anteriores disparou.
-        Dois subcasos:
-            → s.r < rs * closeness  → raio ficou preso perto do horizonte → preto (capturado)
-            → s.r ≥ rs * closeness  → raio ficou orbitando longe → amostra starmap na direção atual
-
-            • A escrita final:
-                ◦ int idx = (y * WIDTH + x) * 3;
-                ◦ pixels[idx+0] = R;   // byte 0 do pixel (x,y) = canal R
-                ◦ pixels[idx+1] = G;   // byte 1 = canal G
-                ◦ pixels[idx+2] = B;   // byte 2 = canal B
-
-            • engine.cpp faz upload disso direto para a textura OpenGL.
-    */
-    
-    if (result == RayResult::NONE){ 
-        printf("\r Acesso na atribuição NONE → FALLBACK\n");
-        result = RayResult::FALLBACK;
-    }
-       
-    if(result == RayResult::HORIZON){
-        printf("\r Acesso na atribuição 0,0,0 em HORIZON \n");
-        R = G = B = 0;
-
-    } else if (result == RayResult::ESCAPE || result == RayResult::FALLBACK){
-            
-        if(result == RayResult::FALLBACK && s.r < rs * CLOSENESS){
-            R = G = B = 0;
-            //printf("Acesso na atribuição 0,0,0 em CLOSE FALLBACK\n");
-            
-        } else {
-            
-            if(result == RayResult::FALLBACK && s.r > rs * CLOSENESS)
-                printf("\r Acesso na atribuição R,G,B em FAR FALLBACK\n");
-            else
-                int a;
-                //printf("\r Acesso na atribuição R,G,B em ESCAPE\n");
-
-            while(s.phi >  PI) s.phi -= 2.0 * PI;
-            while(s.phi < -PI) s.phi += 2.0 * PI;
-
-            float u_tex = (float)(s.phi / (2.0 * PI)) + 0.5f;
-            float v_tex = (float)(s.theta / PI);
-
-            float4 color = tex2D<float4>(starmap, u_tex, v_tex);
-
-            R = (unsigned char)(fminf(color.x * 255.0f, 255.0f));
-            G = (unsigned char)(fminf(color.y * 255.0f, 255.0f));
-            B = (unsigned char)(fminf(color.z * 255.0f, 255.0f));
-                
-            //if(x % 2 == 0)
-            //  printf("%d, %d, %d: FINAL\n\n", R,G,B);
-        }
-    }
-
-    //if(result == RayResult::DISK
-    if(accum_alpha > 0.0001f){
-
-        float bg_weight = 1.0f - fminf(accum_alpha, 1.0f);
-
-        R = (unsigned char)(fminf((accum_r + R/255.0f * bg_weight) * 255.0f, 255.0f));
-        G = (unsigned char)(fminf((accum_g + G/255.0f * bg_weight) * 255.0f, 255.0f));
-        B = (unsigned char)(fminf((accum_b + B/255.0f * bg_weight) * 255.0f, 255.0f));
-        
-    }
-    //@} 
- 
 
     int idx = (y * WIDTH + x) * 3;
 
     pixels[idx+0] = R;
     pixels[idx+1] = G;
     pixels[idx+2] = B;
-
+        
     SH_RECORD(d_state_counts, result);
 
 }
@@ -1587,14 +969,6 @@ void launchPNG( unsigned char* pixels,
     dim3 numBlocks((WIDTH + 15)/16, (HEIGHT + 15)/16);
         
     
-        // ─── debug ────────────────────────────────────────────────────────────────────────────────────────────
-        /*
-        fprintf(stderr, "[PNG] launching: %dx%d rs=%.3e MAX_STEPS=%d STEP_FACTOR=%.4f\n",
-            WIDTH, HEIGHT, rs, BH::MAX_STEPS, BH::STEP_FACTOR);
-        */
-        // ─────────────────────────────────────────────────────────────────────────────────────────────────
-
-
     // ─────────────────────────────────────────────────────────────────────────────────────────────────
     //@{
     /*
@@ -1642,11 +1016,13 @@ void launchPNG( unsigned char* pixels,
 
     //ck("Post-Kernel");
     
+
     cudaStreamSynchronize(kernel_stream); 
     ck("StreamSync");
     
     cudaMemcpy(pixels, d_pixels, nbytes, cudaMemcpyDeviceToHost);
     ck("cudaMemcpy");
+    
 
 
     // ─────────────────────────────────────────────────────────────────────────────────────────────────

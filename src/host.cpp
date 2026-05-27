@@ -81,7 +81,6 @@ void raytraceCUDA(  unsigned char* pixels,
     #else
     if(BH::is_gl){
         launchGL(surface, WIDTH, HEIGHT, c_pos, c_fwd, c_right, c_up, fov_y, RS, starmap, perlin);
-        cout << "aaa";
     } else {
         launchPNG(pixels, WIDTH, HEIGHT, c_pos, c_fwd, c_right, c_up, fov_y, RS, starmap, perlin);
     }

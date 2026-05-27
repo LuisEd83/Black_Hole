@@ -1,6 +1,11 @@
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 → pro README
 
+
+A CONDICIONAL s.r > escape é o grande problema.
+VER SE O PROBLEMA É s.r ou escape pequeno
+
+
 cmake -B build -S . && cmake --build build --clean-first && ./build/BlackHoleCUDA
 
 blackhole/
