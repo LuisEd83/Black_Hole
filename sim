@@ -1,0 +1,97 @@
+#!/bin/bash
+
+
+# -------------------------------------------------------------------------------------------------
+# latest_png — imprime o caminho do PNG mais recente no diretório atual e subdiretórios
+
+path_dir="/output/"
+
+latest_png() {
+    dir="${1:-.}"
+    
+    local result
+    result=$(find "$dir" -maxdepth 2 -name "*.png" -printf "%T@ %p\n" 2>/dev/null \
+             | sort -rn \
+             | head -1 \
+             | awk '{print $2}')
+
+    if [ -z "$result" ]; then
+        echo "Nenhum .png encontrado em '$dir'"
+        return 1
+    fi
+
+    echo "$result"
+}
+
+# -------------------------------------------------------------------------------------------------
+# show_latest — abre o PNG mais recente no visualizador padrão
+
+show_latest() {
+    
+    local dir="$(pwd)$path_dir"
+    
+    local file
+    file=$(latest_png $dir)
+
+    if [ $? -ne 0 ]; then
+        echo "err"
+        return 1
+    fi
+
+    if [[ "${file##*.}" == "png" ]]; then
+
+        echo "Abrindo: $file"
+
+        # tenta os visualizadores mais comuns no Linux
+        if command -v gwenview &>/dev/null; then gwenview "$file"
+        else
+            echo "Nenhum visualizador encontrado. arquivo: $file"
+            return 1
+        fi
+
+    else
+        echo "há algum erro no seu sh..."
+        return 1
+    fi
+}
+
+
+# -------------------------------------------------------------------------------------------------
+# png_info — imprime nome, tamanho e data dos últimos N pngs
+
+png_info() {
+
+    local dir="${1:-.}"
+    local n="${2:-5}"     # quantos mostrar, padrão 5
+
+    echo "── últimos $n PNGs em '$dir' ──"
+    find "$dir" -maxdepth 2 -name "*.png" -printf "%T@ %TY-%Tm-%Td %TH:%TM  %8s bytes  %p\n" 2>/dev/null \
+        | sort -rn \
+        | head -"$n" \
+        | awk '{printf "  %s %s  %s  %s\n", $2, $3, $4, $5}'
+}
+
+
+# -------------------------------------------------------------------------------------------------
+# build_and_show — compila e abre o output automaticamente
+# uso: build_and_show [diretório do projeto]
+
+simular() {
+    #local project_dir="${1:-.}"
+    local mode="${1:-all}"
+    echo "── compilando ──"
+    echo ""
+    cmake -B build -S . -DBUILD_MODE=$mode && cmake --build build --clean-first && DISPLAY=:0 GDK_BACKEND=x11 ./build/BlackHoleCUDA
+    echo ""
+    echo ""
+    show_latest
+
+}
+
+
+# -------------------------------------------------------------------------------------------------
+# executa show_latest diretamente se o script for rodado (não sourced)
+
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    show_latest "$(pwd)/output/"
+fi

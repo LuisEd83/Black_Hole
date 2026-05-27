@@ -81,30 +81,48 @@ No modo interativo, o kernel CUDA escreve os pixels **diretamente na textura Ope
 ```
 Black_Hole/
 ├── cuda/
-│   ├── geodesic.cu        # Kernel principal: integração RK4 + composição de cor
-│   ├── geodesic.cuh       # Header do kernel (struct Rays, constantes físicas)
-│   ├── comms.cu           # activateSetFlags, getStateCountsPtr
-│   ├── comms.cuh          # Declarações de comms
-│   └── feedbacks.cu       # Estimativa de tempo e warmup do driver CUDA
+│   ├── geod.cu  ⚠ - [WIP]  # __devices puramente geodésicas de cálculo: integração RK4 + composição de cor
+│   ├── png_kernel.cu       # Kernel para PNG: I/O especificado
+│   ├── gl_kernel.cu        # Kernel para GL: add peristent threads, I/O especificado
+│   ├── comms.cu            # activateSetFlags, getStateCountsPtr
+│   └── feedbacks.cu        # Estimativa de tempo e warmup do driver CUDA
+│
+├── src/
+│   ├── engine.cpp          # Loop principal OpenGL, CUDA-GL Interop, callbacks de câmera
+│   ├── host.cpp            # Ponte CPU→GPU: converte vetores GLM → double3, chama launchRaytrace
+│   ├── temp_and_time.cpp   # Leitura de temperatura GPU/CPU, helpers de tempo
+│   ├── cpu_raytrace.cpp    # "Kernel" geodésico em CPU.
+│   ├── starmap.cpp         # Carregamento e textura CUDA do mapa estelar
+│   ├── perlin.cpp          # Carregamento e textura CUDA do ruído de Perlin
+│   └── lodepng.h           # Codificação PNG (LodePNG)
+│
+├── headers/
+│   ├── geodesic.cuh        # Header do kernel (struct Rays, constantes físicas)
+│   ├── feedbacks.cuh       # Declaração de funções para uso em feedbacks
+│   ├── comms.cuh           # Declaração de funções auxiliares de comunicação ao kernel
+│   ├── engine.hpp          # Loop principal OpenGL, CUDA-GL Interop, callbacks de câmera
+│   ├── constants.hpp       # Parâmetros globais: resolução, steps, fatores físicos
+│   ├── distribution.hpp    # StateHeatmap: display de progresso em tempo real via cudaStream
+│   ├── cpu_raytrace.hpp    # Header de funções para cálculo em CPU
+│   ├── cpu_texture.hpp     # Header de utils que criam textura 2D para cálculo em CPU
+│   ├── platform.hpp        # Para uso em arquivos que usam lógica CUDA em plataformas non-CUDA 
+│   ├── temp_and_time.hpp   # Header de funções para monitoramento de tempo e temperatura
+│   ├── starmap.hpp         # Declaração de funções e variáveis para uso do mapa estelar
+│   ├── perlin.hpp          # Declaração de funções e variáveis para uso do ruído de perlin
+│   └── lodepng.h           # Header de Codificação PNG (LodePNG)
+│
 ├── shaders/
 │   ├── display.vert       # Quad em tela cheia (procedural, sem VBO)
 │   └── display.frag       # Amostragem da textura CUDA→OpenGL
-├── src/
-│   ├── engine.cpp/.hpp    # Loop principal OpenGL, CUDA-GL Interop, callbacks de câmera
-│   ├── host.cpp           # Ponte CPU→GPU: converte vetores GLM → double3, chama launchRaytrace
-│   ├── constants.hpp      # Parâmetros globais: resolução, steps, fatores físicos
-│   ├── distribution.hpp   # StateHeatmap: display de progresso em tempo real (std::thread)
-│   ├── starmap.cpp/.hpp   # Carregamento e textura CUDA do mapa estelar
-│   ├── perlin.cpp/.hpp    # Carregamento e textura CUDA do ruído de Perlin
-│   ├── temp_and_time.cpp  # Leitura de temperatura GPU/CPU, helpers de tempo
-│   └── lodepng.cpp/.h     # Codificação PNG (LodePNG)
+│
 ├── data/
 │   ├── starmap.png        # Mapa estelar equirretangular (não incluído no repo)
 │   └── perlin.txt         # Dados de ruído pré-computados (não incluído no repo)
-├── main.cpp               # Modo interativo: configura câmera e chama engineRun()
-├── png.cpp                # Modo exportação: renderiza e salva PNG via LodePNG
-├── CMakeLists.txt         # Build system (CMake 3.24+)
-├── CMakePresets.json      # Presets para Linux, macOS e Windows
+│
+├── gl.cpp                  # Modo interativo: configura câmera e chama engineRun()
+├── png.cpp                 # Modo exportação: renderiza e salva PNG via LodePNG
+├── CMakeLists.txt          # Build system (CMake 3.24+)
+├── CMakePresets.json       # Presets para Linux, macOS e Windows
 └── LICENSE
 ```
 
