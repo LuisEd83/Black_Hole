@@ -6,8 +6,13 @@
 #include "constants.hpp"
 #include "platform.hpp"
 #include "comms.cuh"
+#include "distribution.hpp"
+#include "feedbacks.cuh"
+
+#include <cmath>
 
 using namespace BH;
+
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // struct Rays:
@@ -64,6 +69,24 @@ void launchPNG( unsigned char* pixels,
                 cudaTextureObject_t starmap,
                 cudaTextureObject_t perlin
             );
+
+
+__device__ void pixelProcess(   int x, 
+                                int y,
+                                unsigned char &R, 
+                                unsigned char &G, 
+                                unsigned char &B, 
+                                int WIDTH, int HEIGHT,
+                                double3 pos,
+                                double3 fwd,
+                                double3 right,
+                                double3 up,
+                                float fov_y,
+                                double rs,
+                                cudaTextureObject_t starmap,
+                                cudaTextureObject_t perlin,
+                                RayResult& result
+                            );
 
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

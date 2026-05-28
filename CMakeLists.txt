@@ -43,7 +43,9 @@ set(COMMON_SOURCES
     src/host.cpp
     cuda/feedbacks.cu
     cuda/comms.cu
-
+    cuda/geod.cu
+    cuda/effects.cu
+    cuda/raytrace.cu
 )
 
 set(SOURCES_PNG 

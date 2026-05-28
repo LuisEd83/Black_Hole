@@ -1,11 +1,4 @@
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-→ pro README
-
-
-A CONDICIONAL s.r > escape é o grande problema.
-VER SE O PROBLEMA É s.r ou escape pequeno
-
-
 cmake -B build -S . && cmake --build build --clean-first && ./build/BlackHoleCUDA
 
 blackhole/
@@ -40,6 +33,7 @@ blackhole/
         ◦ README!!!
         ◦ refazer a distribuição espacial de pixels
         ◦ rename StateHeatmap para distribution
+        ◦ mover geodesica para float.
 
      • Médias:
         ◦ medições de temperatura while(kernelActive):
@@ -47,8 +41,6 @@ blackhole/
         ◦ descobrir porque DISK não está sendo considerado: problema no local da atribuição ou ESCAPE roubando casos.
 
     • Difíceis:
-        ◦ repetir starmap para evitar pitch blacks no opengl
-            → talvez seja só um problema de vetores
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

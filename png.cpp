@@ -172,7 +172,13 @@ int main() {
         float(cam_dist) * BH::Z_COEF
     );
     
-    glm::vec3 target    = glm::vec3(0.0f, 0.0f, 0.0f);
+    glm::vec3 target = glm::vec3(
+        (RS*x_multiplier) + (RS*x_bias),    
+        (RS*y_multiplier) + (RS*y_bias),
+        (RS*z_multiplier) + (RS*z_bias)
+    );
+
+
     glm::vec3 world_up  = glm::vec3(0.0f, 0.0f, 1.0f);
    
     glm::vec3 fwd   = glm::normalize(target - pos);
