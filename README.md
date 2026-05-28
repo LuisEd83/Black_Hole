@@ -81,9 +81,15 @@ No modo interativo, o kernel CUDA escreve os pixels **diretamente na textura Ope
 ```
 Black_Hole/
 ├── cuda/
-│   ├── geod.cu  ⚠ - [WIP]  # __devices puramente geodésicas de cálculo: integração RK4 + composição de cor
+│   ├── internals/
+│   │   ├── effects.cuh     # header interno de declaração de devices de efeitos
+│   │   └── geod.cuh        # header interno de declaração de rk4 e geodesicRHS
+│   │   
 │   ├── png_kernel.cu       # Kernel para PNG: I/O especificado
 │   ├── gl_kernel.cu        # Kernel para GL: add peristent threads, I/O especificado
+│   ├── geod.cu             # __devices puramente geodésicas de cálculo: integração RK4 + composição de cor
+│   ├── effects.cu          # funções de efeito visual
+│   ├── raytrace.cu         # loop integrador por pixel
 │   ├── comms.cu            # activateSetFlags, getStateCountsPtr
 │   └── feedbacks.cu        # Estimativa de tempo e warmup do driver CUDA
 │
