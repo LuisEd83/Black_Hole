@@ -1,39 +1,11 @@
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-cmake -B build -S . && cmake --build build --clean-first && ./build/BlackHoleCUDA
-
-blackhole/
-│
-├── CMakeLists.txt
-├──  main.cpp
-│
-├── cuda/
-│   ├── geodesic.cu
-│   ├── WIP renderer.cuh        ← from anwoy: Ray struct, RK4, intersection
-│   ├── WIP noise.cuh           ← from anwoy: disk Perlin noise sampling
-│   └── WIP disk.cuh            ← from anwoy: disk geometry helpers
-│
-├── shaders/
-│   ├── display.vert        ← trivial fullscreen quad passthrough
-│   └── display.frag        ← samples the CUDA-written texture
-│
-├── data/
-│   ├── perlin.txt          ← generated (gitignored)
-│   └── starmap.png         ← generated (gitignored)
-│
-└── python/
-    ├── create_disk.py
-    ├── starmap_preprocess.py
-    └── requirements.txt
-   
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 → Misc:
 
     • Fáceis:
         ◦ README!!!
         ◦ refazer a distribuição espacial de pixels
         ◦ rename StateHeatmap para distribution
-        ◦ mover geodesica para float.
+        ◦ mover geodésica para float.
 
      • Médias:
         ◦ medições de temperatura while(kernelActive):
@@ -56,10 +28,6 @@ blackhole/
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 → Rendering:
-    
-    • General:
-        ◦ fazer um mapa de calor só para ver o comportamento
-
 
     • Efeitos:
 
@@ -71,6 +39,7 @@ blackhole/
         
         ◦ exploração real das bordas da sombra e dos polos do disco
     
+
     • Real Time:
 
         ◦ Reprojection / Frame Extrapolation

@@ -75,14 +75,45 @@ namespace BH {
 
 
     // ─────────────────────────────────────────────────────────────────────────────────────────────────
-    // de natureza do controle:
+    // de natureza do controle, boosters da simulação OpenGL:
 
 
     const string res = "Minimal";
     const bool is_sim = true;
-    const bool is_gl = false;
+    const bool is_gl = true;
     const bool is_persis = true;
+    const bool TAA = 0;
+    const bool CHECKERBOARD = 0;
+    const bool UPSCALE = 0;
+    
+    
+    // ─────────────────────────────────────────────────────────────────────────────────────────────────
+    // structs de parâmetros:
 
+
+    struct RenderParams{
+    
+        int WIDTH;
+        int HEIGHT;
+        double3 pos;
+        double3 fwd;
+        double3 right;
+        double3 up;
+        float fov_y;
+        cudaSurfaceObject_t starmap;
+        cudaSurfaceObject_t perlin;
+
+    };
+
+
+    struct PipelineParams{
+
+        cudaSurfaceObject_t surface_prev;
+        int* d_counter;
+        int frame_parity;
+
+    };   
+    
     
     // ─────────────────────────────────────────────────────────────────────────────────────────────────
     // de natureza da simulação:
@@ -124,21 +155,20 @@ namespace BH {
     constexpr double Y_COEF = 1.1;
     constexpr double Z_COEF = 0.2;
     
-    constexpr float x_multiplier = -2.0f;
+    constexpr float x_multiplier = 2.0f;
     constexpr float y_multiplier = 0.0f;
     constexpr float z_multiplier = 0.0f;
     
-    constexpr float x_bias = 5.0f;
+    constexpr float x_bias = 2.5f;
     constexpr float y_bias = 0.0f;
     constexpr float z_bias = 0.0f;
-
 
     
     constexpr int MAX_STEPS = 10000;
     constexpr double STEP_FACTOR = 0.1;
     
     constexpr double ESCAPE_FACTOR = 200.0;
- 
+            
 
     // ─────────────────────────────────────────────────────────────────────────────────────────────────
     // de natureza avançada de simulação:
@@ -185,8 +215,6 @@ namespace BH {
     
     constexpr double ADAPTIVE_FACTOR = 5.0;
     constexpr double EMISSIVITY_RATE = 0.01;
-
-    
 
 
 }

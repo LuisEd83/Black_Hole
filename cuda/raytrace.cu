@@ -11,16 +11,9 @@ __device__ void pixelProcess(   int x,
                                 int y,
                                 unsigned char &R, 
                                 unsigned char &G, 
-                                unsigned char &B, 
-                                int WIDTH, int HEIGHT,
-                                double3 pos,
-                                double3 fwd,
-                                double3 right,
-                                double3 up,
-                                float fov_y,
-                                double rs,
-                                cudaTextureObject_t starmap,
-                                cudaTextureObject_t perlin,
+                                unsigned char &B,
+                                const RenderParams& rnd,
+                                const PipelineParams& ppl,
                                 RayResult& result
                             ){
             
@@ -35,7 +28,18 @@ __device__ void pixelProcess(   int x,
             → relaciona x,y à aspect_ratio e u,v.
             → fov_y controla quantos graus temos visão. 
     */
- 
+    
+    int WIDTH = rnd.WIDTH;
+    int HEIGHT = rnd.HEIGHT;
+    double3 pos  = rnd.pos;
+    double3 right  = rnd.right;
+    double3 fwd  = rnd.fwd;
+    double3 up  = rnd.up;
+    float fov_y = rnd.fov_y;
+    cudaSurfaceObject_t starmap = rnd.starmap;
+    cudaSurfaceObject_t perlin = rnd.perlin;
+    double rs = RS;
+
 
     float aspect     = float(WIDTH) / float(HEIGHT);
     float tanHalfFov = tanf(fov_y * 0.5f * (float)PI / 180.0f);
@@ -137,10 +141,11 @@ __device__ void pixelProcess(   int x,
         return;
     }
 
-    float dx_f = st * cp;
-    float dy_f = st * sp;
-    float dz_f = ct;
-
+    /*
+        float dx_f = st * cp;
+        float dy_f = st * sp;
+        float dz_f = ct;
+    */
     //@}
 
 
@@ -540,7 +545,6 @@ __device__ void pixelProcess(   int x,
     }
     //@} 
     
-
 }
 
 

@@ -30,28 +30,10 @@ using namespace glm;
 
 #if !BH_CPU_BACKEND
 void launchGL(  cudaSurfaceObject_t surface, 
-                int WIDTH, 
-                int HEIGHT,
-                double3 pos, 
-                double3 fwd, 
-                double3 right, 
-                double3 up,
-                float fov_y, 
-                double rs, 
-                cudaTextureObject_t starmap, 
-                cudaTextureObject_t perlin);
+                RenderParams rnd);
 
 void launchPNG( unsigned char* pixels,
-                int WIDTH, 
-                int HEIGHT,
-                double3 pos, 
-                double3 fwd, 
-                double3 right, 
-                double3 up,
-                float fov_y, 
-                double rs, 
-                cudaTextureObject_t starmap, 
-                cudaTextureObject_t perlin);
+                RenderParams rnd);
 #endif
 
 
@@ -68,21 +50,36 @@ void raytraceCUDA(  unsigned char* pixels,
                     vec3 up,
                     float fov_y){
 
-    
+        
     double3 c_pos   = { pos.x,   pos.y,   pos.z   };
     double3 c_fwd   = { fwd.x,   fwd.y,   fwd.z   };
     double3 c_right = { right.x, right.y, right.z };
     double3 c_up    = { up.x,    up.y,    up.z    };
     
+    RenderParams rnd =   {      WIDTH, 
+                                HEIGHT, 
+                                c_pos, 
+                                c_fwd, 
+                                c_right,
+                                c_up,
+                                fov_y,
+                                starmap,    
+                                perlin
+                            }; 
+
+
+
     #if BH_CPU_BACKEND
         launchRaytraceCPU(  pixels, WIDTH, HEIGHT,
                             c_pos, c_fwd, c_right, c_up,
                             fov_y, rs_local, starmap, perlin);
     #else
     if(BH::is_gl){
-        launchGL(surface, WIDTH, HEIGHT, c_pos, c_fwd, c_right, c_up, fov_y, RS, starmap, perlin);
+        launchGL(surface, rnd);
+
     } else {
-        launchPNG(pixels, WIDTH, HEIGHT, c_pos, c_fwd, c_right, c_up, fov_y, RS, starmap, perlin);
+        launchPNG(pixels, rnd);
+
     }
 
     cudaError_t err = cudaGetLastError();

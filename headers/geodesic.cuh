@@ -44,30 +44,12 @@ struct Rays {
 
 
 void launchGL(  cudaSurfaceObject_t surface,
-                int WIDTH, 
-                int HEIGHT,
-                double3 pos,
-                double3 fwd,
-                double3 right,
-                double3 up,
-                float fov_y,
-                double rs,
-                cudaTextureObject_t starmap,
-                cudaTextureObject_t perlin
+                RenderParams rnd
             );
 
 
 void launchPNG( unsigned char* pixels,
-                int WIDTH, 
-                int HEIGHT,
-                double3 pos,
-                double3 fwd,
-                double3 right,
-                double3 up,
-                float fov_y,
-                double rs,
-                cudaTextureObject_t starmap,
-                cudaTextureObject_t perlin
+               RenderParams rnd
             );
 
 
@@ -76,15 +58,8 @@ __device__ void pixelProcess(   int x,
                                 unsigned char &R, 
                                 unsigned char &G, 
                                 unsigned char &B, 
-                                int WIDTH, int HEIGHT,
-                                double3 pos,
-                                double3 fwd,
-                                double3 right,
-                                double3 up,
-                                float fov_y,
-                                double rs,
-                                cudaTextureObject_t starmap,
-                                cudaTextureObject_t perlin,
+                                RenderParams& rnd,
+                                PipelineParams& ppl,
                                 RayResult& result
                             );
 

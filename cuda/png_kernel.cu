@@ -5,18 +5,13 @@
 
 
 __global__ void raytraceKernelPNG(  unsigned char* pixels,
-                                    int WIDTH,
-                                    int HEIGHT,
-                                    double3 pos,
-                                    double3 fwd, 
-                                    double3 right,
-                                    double3 up,
-                                    float fov_y,
-                                    double rs,  
-                                    cudaTextureObject_t starmap,
-                                    cudaTextureObject_t perlin){
+                                    RenderParams& rnd){
 
+    PipelineParams ppl = {};      
 
+    int WIDTH = rnd.WIDTH;
+    int HEIGHT = rnd.HEIGHT;
+    
     RayResult result = RayResult::NONE;
     int x = 0, y = 0;
     unsigned char R = 0, G = 0, B = 0;
@@ -26,12 +21,10 @@ __global__ void raytraceKernelPNG(  unsigned char* pixels,
     if (x >= WIDTH || y >= HEIGHT) return;
     
 
-    pixelProcess( x, y, 
+    pixelProcess(   x, y, 
                     R, G, B,
-                    WIDTH, HEIGHT, 
-                    pos, fwd, right, up,
-                    fov_y, rs, 
-                    starmap, perlin,
+                    rnd,
+                    ppl,
                     result
                  );
 
@@ -52,21 +45,12 @@ __global__ void raytraceKernelPNG(  unsigned char* pixels,
 
 
 void launchPNG( unsigned char* pixels,
-                int WIDTH, 
-                int HEIGHT,
-                double3 pos, 
-                double3 fwd, 
-                double3 right, 
-                double3 up,
-                float fov_y,
-                double rs,
-                cudaTextureObject_t starmap,
-                cudaTextureObject_t perlin){
+                RenderParams rnd){
+        
     
-
-    size_t nbytes = WIDTH * HEIGHT * 3;
+    size_t nbytes = rnd.WIDTH * rnd.HEIGHT * 3;
     dim3 blockSize(16, 16);
-    dim3 numBlocks((WIDTH + 15)/16, (HEIGHT + 15)/16);
+    dim3 numBlocks((rnd.WIDTH + 15)/16, (rnd.HEIGHT + 15)/16);
         
     
     // ─────────────────────────────────────────────────────────────────────────────────────────────────
@@ -105,13 +89,7 @@ void launchPNG( unsigned char* pixels,
 
     raytraceKernelPNG<<<numBlocks, blockSize, 0, kernel_stream>>>(   
             d_pixels, 
-            WIDTH, 
-            HEIGHT, 
-            pos, fwd, right, up, 
-            fov_y, 
-            rs, 
-            starmap, 
-            perlin);
+            rnd);
 
 
     //ck("Post-Kernel");
