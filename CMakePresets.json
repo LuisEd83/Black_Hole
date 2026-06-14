@@ -1,85 +1,129 @@
 {
-  "version": 3,
-  "cmakeMinimumRequired": { "major": 3, "minor": 24, "patch": 0 },
-
-  "configurePresets": [
-    {
-      "name": "linux-release",
-      "displayName": "Linux — Release",
-      "description": "GCC + Ninja. Instale as deps: sudo apt install libglfw3-dev libglew-dev libglm-dev",
-      "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release"
-      }
+    "version": 6,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 23,
+        "patch": 0
     },
-    {
-      "name": "linux-debug",
-      "displayName": "Linux — Debug",
-      "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build-debug",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug"
-      }
-    },
-    {
-      "name": "macos-release",
-      "displayName": "macOS — Release (CPU backend)",
-      "description": "Clang + Ninja, sem CUDA. Funciona em Apple Silicon e Intel. Instale as deps: brew install glfw glew glm",
-      "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release"
-      }
-    },
-    {
-      "name": "windows-vs2022",
-      "displayName": "Windows — Visual Studio 2022 (x64)",
-      "description": "MSVC + CUDA Toolkit. Instale as deps via vcpkg: vcpkg install glfw3 glew glm",
-      "generator": "Visual Studio 17 2022",
-      "architecture": "x64",
-      "binaryDir": "${sourceDir}/build",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release"
-      }
-    },
-    {
-      "name": "windows-vs2019",
-      "displayName": "Windows — Visual Studio 2019 (x64)",
-      "generator": "Visual Studio 16 2019",
-      "architecture": "x64",
-      "binaryDir": "${sourceDir}/build",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release"
-      }
-    }
-  ],
-
-  "buildPresets": [
-    {
-      "name": "linux-release",
-      "configurePreset": "linux-release",
-      "configuration": "Release"
-    },
-    {
-      "name": "linux-debug",
-      "configurePreset": "linux-debug",
-      "configuration": "Debug"
-    },
-    {
-      "name": "macos-release",
-      "configurePreset": "macos-release",
-      "configuration": "Release"
-    },
-    {
-      "name": "windows-vs2022",
-      "configurePreset": "windows-vs2022",
-      "configuration": "Release"
-    },
-    {
-      "name": "windows-vs2019",
-      "configurePreset": "windows-vs2019",
-      "configuration": "Release"
-    }
-  ]
+    "configurePresets": [
+        {
+            "name": "linux-base",
+            "hidden": true,
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/${presetName}",
+            "cacheVariables": {
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            }
+        },
+        {
+            "name": "linux-debug",
+            "inherits": "linux-base",
+            "displayName": "Linux Debug",
+            "description": "Debug build on Linux with Ninja",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "linux-release",
+            "inherits": "linux-base",
+            "displayName": "Linux Release",
+            "description": "Release build on Linux with Ninja",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        },
+        {
+            "name": "macos-base",
+            "hidden": true,
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/${presetName}",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Darwin"
+            },
+            "cacheVariables": {
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            }
+        },
+        {
+            "name": "macos-debug",
+            "inherits": "macos-base",
+            "displayName": "macOS Debug",
+            "description": "Debug build on macOS with Ninja",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "macos-release",
+            "inherits": "macos-base",
+            "displayName": "macOS Release",
+            "description": "Release build on macOS with Ninja",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        },
+        {
+            "name": "windows-base",
+            "hidden": true,
+            "generator": "Visual Studio 17 2022",
+            "binaryDir": "${sourceDir}/build/${presetName}",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            },
+            "cacheVariables": {
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            }
+        },
+        {
+            "name": "windows-debug",
+            "inherits": "windows-base",
+            "displayName": "Windows Debug",
+            "description": "Debug build on Windows with VS2022"
+        },
+        {
+            "name": "windows-release",
+            "inherits": "windows-base",
+            "displayName": "Windows Release",
+            "description": "Release build on Windows with VS2022"
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "linux-debug",
+            "configurePreset": "linux-debug",
+            "displayName": "Build Linux Debug"
+        },
+        {
+            "name": "linux-release",
+            "configurePreset": "linux-release",
+            "displayName": "Build Linux Release"
+        },
+        {
+            "name": "macos-debug",
+            "configurePreset": "macos-debug",
+            "displayName": "Build macOS Debug"
+        },
+        {
+            "name": "macos-release",
+            "configurePreset": "macos-release",
+            "displayName": "Build macOS Release"
+        },
+        {
+            "name": "windows-debug",
+            "configurePreset": "windows-debug",
+            "displayName": "Build Windows Debug",
+            "configuration": "Debug"
+        },
+        {
+            "name": "windows-release",
+            "configurePreset": "windows-release",
+            "displayName": "Build Windows Release",
+            "configuration": "Release"
+        }
+    ]
 }

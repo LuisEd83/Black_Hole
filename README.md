@@ -1,7 +1,7 @@
-# 🕳️ Black Hole Sim
+# 🕳️ Black Hole — Vulkan Edition
 
-> Renderização de buracos negros usando **Ray Tracing**, **OpenGL** e aceleração massiva de GPU via **CUDA**.  
-> Projeto acadêmico com foco em renderização física e paralelismo em GPU.
+> Renderização de buracos negros usando **Ray Tracing**, **Vulkan compute** e **Vulkan graphics**.  
+> Conversão do projeto acadêmico original com foco em renderização física e paralelismo em GPU.
 
 ---
 
@@ -23,9 +23,9 @@
 
 ## 🌌 Sobre o Projeto
 
-**Black Hole Sim** é um simulador físico e visual de buraco negro desenvolvido em C++/CUDA. O objetivo é calcular com precisão como raios de luz se comportam próximos ao campo gravitacional intenso de um corpo compacto — e renderizar esse resultado em tempo real na tela.
+**Black Hole — Vulkan Edition** é a conversão Vulkan do simulador físico e visual de buraco negro original desenvolvido em C++/CUDA. O objetivo é calcular com precisão como raios de luz se comportam próximos ao campo gravitacional intenso de um corpo compacto — e renderizar esse resultado em tempo real usando uma única API gráfica moderna.
 
-O cálculo das geodésicas (trajetórias dos fótons no espaço-tempo curvo de Schwarzschild) é executado em paralelo na GPU via **CUDA**. A composição final da cena ocorre via **OpenGL** com shaders GLSL. Como objeto de estudo, usamos o buraco negro supermassivo da Via Láctea: **Sagittarius A\***.
+O cálculo das geodésicas (trajetórias dos fótons no espaço-tempo curvo de Schwarzschild) é executado em um **compute shader Vulkan** com suporte a `shaderFloat64`. A composição final da cena ocorre via **Vulkan graphics** com dynamic rendering e um quad em tela cheia. Como objeto de estudo, usamos o buraco negro supermassivo da Via Láctea: **Sagittarius A\***.
 
 ---
 
@@ -36,7 +36,7 @@ A simulação se baseia em três pilares físico-computacionais:
 ### 1. Ray Tracing por Pixel
 Cada pixel da imagem corresponde a um raio lançado a partir de uma câmera virtual. O trajeto do raio é integrado numericamente, simulando como o fóton se propaga em um espaço-tempo distorcido pela gravidade.
 
-### 2. Geodésicas em Espaço-Tempo Curvo (CUDA)
+### 2. Geodésicas em Espaço-Tempo Curvo (Compute Shader)
 As equações diferenciais das geodésicas nulas (métrica de Schwarzschild) são integradas com um integrador **Runge-Kutta de 4ª ordem** (RK4). Para cada raio, o kernel determina um de quatro resultados possíveis:
 
 | Resultado | Descrição |
@@ -53,101 +53,90 @@ A aparência do disco incorpora três efeitos relativísticos:
 - **Redshift Gravitacional** — Fótons emitidos mais próximos ao horizonte perdem energia ao escapar do campo gravitacional intenso, tornando as regiões internas mais vermelhas.
 - **Disco Volumétrico** — Em vez de detecção por cruzamento de plano (disco infinitamente fino), a emissividade é acumulada ao longo do caminho do raio dentro do volume do disco, produzindo bordas suaves e múltiplas camadas sobrepostas.
 
-### 4. Renderização OpenGL (CUDA-GL Interop)
-No modo interativo, o kernel CUDA escreve os pixels **diretamente na textura OpenGL** via `cudaSurfaceObject_t`, evitando qualquer transferência GPU→CPU. A textura é então renderizada por um quad em tela cheia com shaders GLSL simples.
+### 4. Pipeline Vulkan Compute → Graphics
+O compute shader escreve os pixels **diretamente em uma imagem `VK_IMAGE_USAGE_STORAGE_BIT`**. Uma pipeline barrier transiciona a imagem para `SHADER_READ_ONLY_OPTIMAL`, e um fragment shader em tela cheia a amostra para exibição. Nenhuma transferência GPU→CPU é necessária para o framebuffer.
 
 ---
 
 ## ✨ Funcionalidades
 
 - Integração RK4 de geodésicas nulas na métrica de Schwarzschild
-- Paralelismo massivo por pixel via CUDA (Persistent Threads no modo interativo)
-- Renderização em tempo real via OpenGL + GLFW com CUDA-GL Interop
+- Paralelismo massivo por pixel via compute shader Vulkan (`shaderFloat64`)
+- Renderização em tempo real via Vulkan graphics + GLFW com dynamic rendering
 - Fundo estelar realista carregado de um starmap equirretangular
 - Ruído de Perlin para textura turbulenta do disco de acreção
 - Disco volumétrico com emissividade acumulada ao longo do raio
 - Desvio Doppler relativístico e redshift gravitacional por pixel
 - Passo adaptativo: step reduzido automaticamente próximo ao horizonte
 - Early exit por parâmetro de impacto (raios que definitivamente escapam)
-- Monitoramento em tempo real de temperatura de GPU/CPU no terminal
-- Dois modos de saída: janela OpenGL interativa ou exportação PNG
-- Suporte a múltiplas resoluções (800×600 até 4096×2048)
-- Multiplataforma: **Linux**, **macOS** (Intel) e **Windows**
+- Quad em tela cheia com `gl_VertexID`, sem VBO
+- Double buffering (`MAX_FRAMES_IN_FLIGHT = 2`) para paralelismo CPU-GPU
+- Suporte a redimensionamento de janela com recriação de swapchain
+- Validation layers ativadas em builds de debug
+- Build limpo com zero warnings do compilador (C++20 estrito)
+- Multiplataforma: **Linux**, **macOS** (MoltenVK) e **Windows**
 
 ---
 
 ## 📁 Estrutura do Projeto
 
 ```
-Black_Hole/
-├── cuda/
-│   ├── internals/
-│   │   ├── effects.cuh     # header interno de declaração de devices de efeitos
-│   │   └── geod.cuh        # header interno de declaração de rk4 e geodesicRHS
-│   │   
-│   ├── png_kernel.cu       # Kernel para PNG: I/O especificado
-│   ├── gl_kernel.cu        # Kernel para GL: add peristent threads, I/O especificado
-│   ├── geod.cu             # __devices puramente geodésicas de cálculo: integração RK4 + composição de cor
-│   ├── effects.cu          # funções de efeito visual
-│   ├── raytrace.cu         # loop integrador por pixel
-│   ├── comms.cu            # activateSetFlags, getStateCountsPtr
-│   └── feedbacks.cu        # Estimativa de tempo e warmup do driver CUDA
+blackhole_vulkan/
+├── include/
+│   ├── test_app.hpp # Classe orquestradora VulkanTestApp
+│   ├── utils.hpp # Utilitários estáticos: readFile(), debugCallback()
+│   ├── vk_init/
+│   │ ├── setup.hpp # VulkanTestAppBase + Setup + DeviceCapabilities
+│   │ ├── presentation.hpp # Apresentação (swapchain, visualizações de imagem)
+│   │ ├── compute_pipeline.hpp # ComputePipeline (shader de computação, layout de descritores)
+│   │ └── graphics_pipeline.hpp # GraphicsPipeline (pipeline gráfico, módulos de shader)
+│   ├── vk_main/
+│   │ └── render.hpp # Renderização (buffers de comando, sincronização, buffers, descritores, desenho)
+│   └── vk_utils/
+│   └── vkimage.hpp # Auxiliar do VulkanImage (imagem, visualização, amostrador, upload)
 │
 ├── src/
-│   ├── engine.cpp          # Loop principal OpenGL, CUDA-GL Interop, callbacks de câmera
-│   ├── host.cpp            # Ponte CPU→GPU: converte vetores GLM → double3, chama launchRaytrace
-│   ├── temp_and_time.cpp   # Leitura de temperatura GPU/CPU, helpers de tempo
-│   ├── cpu_raytrace.cpp    # "Kernel" geodésico em CPU.
-│   ├── starmap.cpp         # Carregamento e textura CUDA do mapa estelar
-│   ├── perlin.cpp          # Carregamento e textura CUDA do ruído de Perlin
-│   └── lodepng.h           # Codificação PNG (LodePNG)
-│
-├── headers/
-│   ├── geodesic.cuh        # Header do kernel (struct Rays, constantes físicas)
-│   ├── feedbacks.cuh       # Declaração de funções para uso em feedbacks
-│   ├── comms.cuh           # Declaração de funções auxiliares de comunicação ao kernel
-│   ├── engine.hpp          # Loop principal OpenGL, CUDA-GL Interop, callbacks de câmera
-│   ├── constants.hpp       # Parâmetros globais: resolução, steps, fatores físicos
-│   ├── distribution.hpp    # StateHeatmap: display de progresso em tempo real via cudaStream
-│   ├── cpu_raytrace.hpp    # Header de funções para cálculo em CPU
-│   ├── cpu_texture.hpp     # Header de utils que criam textura 2D para cálculo em CPU
-│   ├── platform.hpp        # Para uso em arquivos que usam lógica CUDA em plataformas non-CUDA 
-│   ├── temp_and_time.hpp   # Header de funções para monitoramento de tempo e temperatura
-│   ├── starmap.hpp         # Declaração de funções e variáveis para uso do mapa estelar
-│   ├── perlin.hpp          # Declaração de funções e variáveis para uso do ruído de perlin
-│   └── lodepng.h           # Header de Codificação PNG (LodePNG)
+│   ├── test_app.cpp # (Mínimo — orquestrador somente cabeçalho)
+│   ├── vk_init/
+│   │ ├── setup.cpp # Implementação do Setup
+│   │ ├── apresentação.cpp # Implementação da Apresentação
+│   │ ├── computa_pipeline.cpp # Implementação do ComputePipeline
+│   │ └── graphics_pipeline.cpp # Implementação do GraphicsPipeline
+│   └── vk_main/
+│   └── render.cpp # Implementação do Render (buffers, descritores, sincronização, desenho)
 │
 ├── shaders/
-│   ├── display.vert       # Quad em tela cheia (procedural, sem VBO)
-│   └── display.frag       # Amostragem da textura CUDA→OpenGL
+│   ├── graphics.slang # Shaders de Vertex e Fragment (para amostragem da textura resultante do compute em um quad em tela cheia)
+│   ├── compute.slang # Shader de computação (kernel)
+│   ├── constants.slang # Constantes físicas
+│   ├── geodesic.slang # Integração geodésica
+│   └── effect.slang # Efeitos visuais (Doppler, redshift)
 │
-├── data/
-│   ├── starmap.png        # Mapa estelar equirretangular (não incluído no repo)
-│   └── perlin.txt         # Dados de ruído pré-computados (não incluído no repo)
+├── dados/
+│   ├── starmap.png # Mapa estelar equirretangular
+│   └── perlin.txt # Dados de ruído 3D Perlin
 │
-├── gl.cpp                  # Modo interativo: configura câmera e chama engineRun()
-├── png.cpp                 # Modo exportação: renderiza e salva PNG via LodePNG
-├── CMakeLists.txt          # Build system (CMake 3.24+)
-├── CMakePresets.json       # Presets para Linux, macOS e Windows
-└── LICENSE
+├── main.cpp # Ponto de entrada — wrapper de tratamento de abordagens
+├── CMakeLists.txt # Configuração de build com compilação Slang
+├── CMakePresets.json # Presets para Linux, macOS e Windows
+├── .clangd # Configuração do clangd para suporte em IDE
+├── .gitignore # Ignora artefatos de build, arquivos de IDE, .spv
+└── LICENCE
 ```
 
 ---
 
 ## 🛠️ Pré-requisitos
 
-É necessária uma **GPU NVIDIA** com suporte a CUDA. A arquitetura é detectada automaticamente via `CUDA_ARCHITECTURES native`.
-
-### Dependências comuns
-
 | Dependência | Versão mínima | Finalidade |
 |---|---|---|
-| CUDA Toolkit | 11.0+ | Compilação dos kernels GPU |
-| CMake | 3.24+ | Build system |
-| OpenGL | 3.3 Core | Renderização |
-| GLEW | qualquer | Carregamento de extensões OpenGL |
-| GLFW3 | 3.4+ | Janela e contexto OpenGL |
-| GLM | qualquer | Matemática 3D |
+| Vulkan SDK | 1.3+ | API de compute + graphics |
+| CMake | 3.14+ | Build system |
+| Compilador C++20 | GCC / Clang / MSVC | Código host |
+| GLFW | 3.3+ | Janela e input |
+| GLM | qualquer | Matemática 3D (tipos de vértice, matrizes MVP) |
+| STB | header-only | Carregamento de imagens (`stb_image.h`) |
+| Slang | qualquer | Compilação de shaders (`slangc`) |
 
 ### Por plataforma
 
@@ -155,22 +144,24 @@ Black_Hole/
 <summary><b>Linux (Ubuntu/Debian)</b></summary>
 
 ```bash
-sudo apt install cmake ninja-build libglfw3-dev libglew-dev libglm-dev
-# CUDA Toolkit: https://developer.nvidia.com/cuda-downloads
+sudo apt install cmake ninja-build libglfw3-dev libglm-dev
+# Vulkan SDK: https://vulkan.lunarg.com/sdk/home
+# Slang: https://github.com/shader-slang/slang/releases
 ```
 
-Compilador: GCC ou Clang com suporte a C++17.
+Compilador: GCC ou Clang com suporte a C++20.
 </details>
 
 <details>
-<summary><b>macOS (Intel)</b></summary>
+<summary><b>macOS</b></summary>
 
 ```bash
-brew install cmake ninja glfw glew glm
-# CUDA Toolkit: https://developer.nvidia.com/cuda-downloads
+brew install cmake ninja glfw glm
+# Vulkan SDK (inclui MoltenVK): https://vulkan.lunarg.com/sdk/home
+# Slang: https://github.com/shader-slang/slang/releases
 ```
 
-> **Apple Silicon (M1/M2/M3):** não suportado. A NVIDIA encerrou o suporte ao CUDA em macOS a partir do macOS Mojave para placas externas, e o Apple Silicon não possui suporte a CUDA de forma alguma.
+> **Apple Silicon (M1/M2/M3):** suportado via MoltenVK. O compute shader usa `shaderFloat64`; verifique se seu dispositivo suporta isso através do MoltenVK.
 
 Compilador: Clang (Xcode Command Line Tools).
 </details>
@@ -178,21 +169,21 @@ Compilador: Clang (Xcode Command Line Tools).
 <details>
 <summary><b>Windows</b></summary>
 
-1. Instale o [Visual Studio 2019 ou 2022](https://visualstudio.microsoft.com/) com o workload **"Desenvolvimento para Desktop com C++"**
-2. Instale o [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads)
+1. Instale o [Visual Studio 2019 ou 2022](https://visualstudio.microsoft.com/) com o workload **"Desenvolvimento para Desktop com C++"**.
+2. Instale o [Vulkan SDK](https://vulkan.lunarg.com/sdk/home).
 3. Instale as dependências via **vcpkg**:
 
 ```powershell
-vcpkg install glfw3 glew glm --triplet x64-windows
+vcpkg install glfw3 glm --triplet x64-windows
 ```
 
 4. Configure o CMake com a integração do vcpkg:
 
 ```powershell
-cmake --preset windows-vs2022 -DCMAKE_TOOLCHAIN_FILE="C:/vcpkg/scripts/buildsystems/vcpkg.cmake"
+cmake --preset windows-release -DCMAKE_TOOLCHAIN_FILE="C:/vcpkg/scripts/buildsystems/vcpkg.cmake"
 ```
 
-Compilador: MSVC (obrigatório para CUDA no Windows — MinGW não é suportado pelo NVCC).
+Compilador: MSVC (recomendado) ou Clang-CL.
 </details>
 
 ---
@@ -206,28 +197,27 @@ Compilador: MSVC (obrigatório para CUDA no Windows — MinGW não é suportado 
 cmake --preset linux-release
 cmake --build --preset linux-release
 
-# macOS (Intel)
+# macOS
 cmake --preset macos-release
 cmake --build --preset macos-release
 ```
 
 ```powershell
 # Windows (PowerShell)
-cmake --preset windows-vs2022
-cmake --build --preset windows-vs2022
+cmake --preset windows-release
+cmake --build --preset windows-release
 ```
 
 ### Manual
 
 ```bash
-git clone https://github.com/LuisEd83/Black_Hole.git
-cd Black_Hole
+git clone -b devulkan https://github.com/LuisEd83/Black_Hole.git
 
 cmake -B build -S .
 cmake --build build --config Release
 ```
 
-> Os shaders e os arquivos de `data/` são copiados automaticamente para o diretório do executável pelo CMake após o build.
+> Os shaders são compilados automaticamente pelo CMake: `slangc` traduz `shaders/graphics.slang` para `shaders/graphics.spv` e `shaders/compute.slang` para `shaders/compute.spv`.
 
 ---
 
@@ -235,20 +225,49 @@ cmake --build build --config Release
 
 ### Modo interativo (padrão)
 
-Execute o binário gerado. Uma janela OpenGL abrirá exibindo a simulação em tempo real:
+Execute o binário sem argumentos. Uma janela GLFW abrirá exibindo a simulação em tempo real:
 
 ```bash
-./build/BlackHoleCUDA       # Linux / macOS
-build\Release\BlackHoleCUDA.exe  # Windows
+# Linux (via CMakePresets)
+./build/linux-release/black_hole_sim
+
+# macOS (via CMakePresets)
+./build/macos-release/black_hole_sim
+
+# Windows (via CMakePresets)
+build\windows-release\Release\black_hole_sim.exe
 ```
 
-**Controles:**
+**Controles do teclado:**
 
 | Entrada | Ação |
 |---|---|
-| Arrastar mouse (botão esquerdo) | Orbitar câmera |
-| Scroll do mouse | Zoom (ajusta raio orbital) |
-| `Esc` | Fechar |
+| `W` | Mover para frente |
+| `S` | Mover para trás |
+| `A` | Mover para a esquerda |
+| `D` | Mover para a direita |
+| `Q` | Mover para baixo |
+| `E` | Mover para cima |
+| `←` / `→` | Rotacionar câmera (yaw) |
+| `↑` / `↓` | Rotacionar câmera (pitch) |
+| `Esc` | Fechar janela |
+
+### Modo de exportação PNG
+
+Execute com a flag `--export` para renderizar um único frame e salvá-lo como PNG (sem janela):
+
+```bash
+# Exporta com padrão: output.png em 1920×1080
+./build/linux-release/black_hole_sim --export
+
+# Exporta com nome customizado
+./build/linux-release/black_hole_sim --export minha_imagem.png
+
+# Exporta com nome e resolução customizados
+./build/linux-release/black_hole_sim --export minha_imagem.png 2560 1440
+```
+
+> ⚠️ Para definir uma resolução customizada, você deve também fornecer o nome do arquivo. A resolução padrão é **1920×1080**.
 
 ### Arquivos de dados necessários
 
@@ -257,70 +276,64 @@ Os seguintes arquivos devem estar presentes em `data/` (relativo ao executável)
 ```
 data/
 ├── starmap.png   # Mapa estelar equirretangular (ex: ESA Gaia DR2)
-└── perlin.txt    # Dados de ruído de Perlin pré-computados
+└── perlin.txt    # Dados de ruído de Perlin 3D pré-computados
 ```
 
 ---
 
 ## ⚙️ Configuração
 
-As principais variáveis de controle estão em `src/constants.hpp`:
+### Parâmetros físicos (shaders)
 
-### Modo de saída
+As constantes físicas (raio de Schwarzschild, fatores de passo, etc.) são definidas diretamente nos shaders compute (`shaders/constants.slang`):
 
-```cpp
-const bool is_gl = true;   // true  → janela OpenGL interativa (main.cpp)
-                           // false → exportação PNG (png.cpp)
+```slang
+static const double MAX_STEPS        5000    // iterações máximas por raio
+static const double STEP_FACTOR      0.5     // tamanho do passo em unidades de rs
+static const double IMPACT_CUTOFF    7.5     // threshold de escape antecipado
+static const double ADAPTIVE_FACTOR  5.0     // raio (em rs) onde o passo diminui
+static const double EMISSIVITY_RATE  0.001   // limiar mínimo de emissividade do disco
 ```
 
-> Para usar `is_gl = false`, é necessário compilar `png.cpp` como ponto de entrada no lugar de `main.cpp`.
+### Parâmetros da câmera
 
-### Resolução
-
-```cpp
-const std::string res = "Minimal";  // define WIDTH e HEIGHT
-```
-
-| Valor | Resolução |
-|---|---|
-| `"Minimal"` | 800 × 600 |
-| `"HD"` | 1280 × 720 |
-| `"HD+"` | 1600 × 900 |
-| `"FHD"` | 1920 × 1080 |
-| `"QHD"` | 2560 × 1440 |
-| `"UHD"` | 3840 × 2160 |
-| `"4K"` | 4096 × 2048 |
-
-### Parâmetros físicos
+A câmera é inicializada com valores fixos em `src/vk_main/render.cpp` (posição em unidades de `rs`):
 
 ```cpp
-constexpr int    MAX_STEPS      = 5000;   // iterações máximas por raio
-constexpr double STEP_FACTOR    = 0.5;    // tamanho do passo em unidades de rs
-constexpr double IMPACT_CUTOFF  = 7.5;    // threshold de escape antecipado
-constexpr double ADAPTIVE_FACTOR = 5.0;  // raio (em rs) em que o step começa a diminuir
-constexpr double EMISSIVITY_RATE = 0.001; // limiar mínimo de emissividade do disco
+// Posição inicial (distância = 12.0 rs, com offsets x=1.0, y=1.1, z=0.7)
+cameraPos = glm::dvec3(12.0, 13.2, 8.4);
+
+// FOV vertical padrão
+fov_y = 60.0f;
 ```
 
-### Câmera (`main.cpp`)
+Para ajustar a posição inicial no modo interativo, modifique `Render::processKeyboardInput()` em `src/vk_main/render.cpp`. Para ajustar no modo de exportação, modifique `Render::exportToImage()` no mesmo arquivo.
 
-```cpp
-const double cam_dist      = RS * BH::factor;  // distância da câmera ao buraco negro
-float fov_y                = 60.0f;            // campo de visão vertical (graus)
-glm::vec3 target           = glm::vec3(...);   // ponto para onde a câmera aponta
-```
+### Resolução de exportação
+
+No modo interativo, a resolução segue a janela (800×600 por padrão, redimensionável). No modo de exportação, a resolução é configurada por argumentos de linha de comando (veja [Uso](#-uso) acima).
 
 ---
 
 ## 🗺️ Roadmap
 
-- [x] Integração RK4 de geodésicas nulas (Schwarzschild)
-- [x] Disco de acreção volumétrico com emissividade acumulada
-- [x] Desvio Doppler relativístico e redshift gravitacional
-- [x] CUDA-GL Interop (zero cópia GPU→CPU no modo interativo)
-- [x] Passo adaptativo próximo ao horizonte de eventos
-- [x] Monitoramento de temperatura GPU/CPU em tempo real
-- [x] Suporte multiplataforma: Linux, macOS, Windows
-- [ ] Suporte à métrica de Kerr (buraco negro em rotação)
+- [x] Arquitetura modular do app Vulkan (hierarquia de subclasses)
+- [x] Vulkan-Hpp RAII com dynamic rendering
+- [x] Compilação Slang → SPIR-V
+- [x] Mapeamento de texturas com staging buffers
+- [x] Uniform buffers com transforms MVP
+- [x] Descriptor sets para UBOs e combined image samplers
+- [x] Swapchain duplo com sincronização adequada
+- [x] Suporte a redimensionamento de janela
+- [x] Compute pipeline com `shaderFloat64`
+- [x] Storage image para saída do compute
+- [x] Compute descriptor set (storage image, UBO, starmap, perlin)
+- [x] Portar `geod.cu`, `effects.cu`, `raytrace.cu` para Slang/GLSL com `dvec3`
+- [x] Display de quad em tela cheia com saída do compute
+- [x] Gravação de command buffers: compute dispatch → barrier → graphics render
+- [x] Controles de câmera (teclado WASD + setas)
+- [x] Modo de exportação PNG
+- [ ] Órbita esférica da câmera com mouse (drag, scroll zoom)
 - [ ] Interface interativa para ajuste de parâmetros em tempo real
 - [ ] Exportação de vídeo frame-a-frame
 - [ ] Empacotamento Docker para build reprodutível
@@ -332,7 +345,7 @@ glm::vec3 target           = glm::vec3(...);   // ponto para onde a câmera apon
 - [James, O. et al. (2015) — *Gravitational lensing by spinning black holes in astrophysics, and in the movie Interstellar*](https://iopscience.iop.org/article/10.1088/0264-9381/32/6/065001)
 - [Luminet, J.-P. (1979) — *Image of a spherical black hole with thin accretion disk*](https://www.aanda.org/articles/aa/full_html/2019/01/aa14506-19/aa14506-19.html)
 - [Misner, Thorne & Wheeler — *Gravitation* (1973)](https://press.princeton.edu/books/hardcover/9780691177793/gravitation)
-- [CUDA C++ Programming Guide — NVIDIA](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)
+- [Vulkan Specification — Khronos Group](https://www.vulkan.org/)
 - [LearnOpenGL](https://learnopengl.com/)
 
 ---
