@@ -44,15 +44,15 @@ private:
     }
 
     void initVulkanHeadless() {
-   	this->createInstance();
-        this->setupDebugMessenger();
-        this->pickPhysicalDeviceHeadless();
-        this->createLogicalDeviceHeadless();
-        this->createComputePipeline();
-        this->createCommandPool();
-        this->createStarmapTexture();
-        this->createPerlinTexture();
-        this->createDescriptorPool();
+	   	this->createInstance();
+	    this->setupDebugMessenger();
+	    this->pickPhysicalDeviceHeadless();
+	    this->createLogicalDeviceHeadless();
+	    this->createComputePipeline();
+	    this->createCommandPool();
+	    this->createStarmapTexture();
+	    this->createPerlinTexture();
+	    this->createDescriptorPool();
     };
 
     void mainLoop() {
@@ -63,6 +63,28 @@ private:
 
             glfwPollEvents();
             this->drawFrame();
+            // Read GPU timestamps using C API
+            std::array<uint64_t, 2> timestamps;
+            vkGetQueryPoolResults(
+                *this->device, *this->queryPool, 0, 2,
+                timestamps.size() * sizeof(uint64_t), timestamps.data(), sizeof(uint64_t),
+                VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
+            
+        
+            // timestampPeriod is in nanoseconds per timestamp unit
+            float timestampPeriod = this->physicalDevice.getProperties().limits.timestampPeriod;
+            float computeTimeNs = static_cast<float>(timestamps[1] - timestamps[0]) * timestampPeriod;
+            this->lastComputeTimeMs = computeTimeNs / 1'000'000.0f;
+        
+            static auto startTime = std::chrono::high_resolution_clock::now();
+            auto currentTime    = std::chrono::high_resolution_clock::now();
+            float time                      = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+            static float fps = 0;
+        
+            if (time >= 1) {
+                fps = 1000.0f/this->lastComputeTimeMs;
+                startTime = currentTime;
+            }
 
             // Update title every 10 frames so it doesn't flicker
                 static int frameCount = 0;
@@ -70,7 +92,8 @@ private:
                     std::ostringstream oss;
                     oss << std::fixed << std::setprecision(2);
                     oss << "Pos: (" << this->cameraPos.x << ", " << this->cameraPos.y << ", " << this->cameraPos.z << ") "
-                        << "Fwd: (" << this->cameraFwd.x << ", " << this->cameraFwd.y << ", " << this->cameraFwd.z << ")";
+                        << "Fwd: (" << this->cameraFwd.x << ", " << this->cameraFwd.y << ", " << this->cameraFwd.z << ") "
+                        << "(" << fps << " FPS)"<< std::endl;
                     glfwSetWindowTitle(this->window, oss.str().c_str());
                 }
         }

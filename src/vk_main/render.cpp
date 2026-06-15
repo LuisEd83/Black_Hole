@@ -15,6 +15,7 @@
 #include <fstream>
 #include <iostream>
 
+
 void Render::createCommandPool() {
     vk::CommandPoolCreateInfo poolInfo{.flags            = vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
                                        .queueFamilyIndex = this->queueIndex};
@@ -732,26 +733,6 @@ void Render::drawFrame() {
         }
     }
 
-    // Read GPU timestamps using C API
-    std::array<uint64_t, 2> timestamps;
-    vkGetQueryPoolResults(
-        *this->device, *this->queryPool, 0, 2,
-        timestamps.size() * sizeof(uint64_t), timestamps.data(), sizeof(uint64_t),
-        VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
-
-    // timestampPeriod is in nanoseconds per timestamp unit
-    float timestampPeriod = this->physicalDevice.getProperties().limits.timestampPeriod;
-    float computeTimeNs = static_cast<float>(timestamps[1] - timestamps[0]) * timestampPeriod;
-    this->lastComputeTimeMs = computeTimeNs / 1'000'000.0f;
-
-    static auto startTime = std::chrono::high_resolution_clock::now();
-    auto currentTime    = std::chrono::high_resolution_clock::now();
-    float time                      = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
-
-    if (time >= 1) {
-        std::cout << "GPU compute time: " << this->lastComputeTimeMs << " ms/frame " << "(" << 1000.0f/this->lastComputeTimeMs << " FPS)"<< std::endl;
-        startTime = currentTime;
-    }
 
     this->frameIndex = (this->frameIndex + 1) % MAX_FRAMES_IN_FLIGHT;
 }

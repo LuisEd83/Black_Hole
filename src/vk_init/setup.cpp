@@ -1,6 +1,7 @@
 #include "vk_init/setup.hpp"
 #include "vk_main/render.hpp"
 #include "utils.hpp"
+#include "vulkan/vulkan.hpp"
 
 #include <GLFW/glfw3.h>
 #include <algorithm>
@@ -23,6 +24,29 @@ const std::vector<char const *> Setup::validationLayers = {
 
 const std::vector<const char *> DeviceCapabilities::requiredExtensions = {
     vk::KHRSwapchainExtensionName};
+
+static VKAPI_ATTR vk::Bool32 VKAPI_CALL debugCallback(vk::DebugUtilsMessageSeverityFlagBitsEXT       severity,
+                                                      vk::DebugUtilsMessageTypeFlagsEXT              type,
+                                                      const vk::DebugUtilsMessengerCallbackDataEXT * pCallbackData,
+                                                      void *                                         pUserData)
+{
+	std::string sev;
+	switch (severity) {
+		case vk::DebugUtilsMessageSeverityFlagBitsEXT::eError:
+			sev = "ERROR";
+			break;
+		case vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning:
+			sev = "WARNING";
+			break;
+		case vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo:
+			sev = "INFO";
+			break;
+		default: sev = "";
+	}
+  std::cerr << "(" << sev << ") " << "validation layer: type " << to_string(type) << " msg: " << pCallbackData->pMessage << std::endl;
+
+  return vk::False;
+}
 
 std::vector<const char *> Setup::getRequiredInstanceExtensions() {
   uint32_t glfwExtensionCount = 0;

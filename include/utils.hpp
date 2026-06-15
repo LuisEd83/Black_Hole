@@ -13,14 +13,14 @@
 
 namespace fs = std::filesystem;
 
-static std::vector<uint32_t> readFile(const std::string& filename) {
+inline std::vector<uint32_t> readFile(const std::string& filename) {
     std::ifstream file(filename, std::ios::ate | std::ios::binary);
 
     if (!file.is_open()) {
         throw std::runtime_error("failed to open file!");
     }
 
-    size_t fileSize = file.tellg();
+    size_t fileSize = static_cast<size_t>(file.tellg());
     if (fileSize % sizeof(uint32_t) != 0) {
         throw std::runtime_error("SPIR-V file size is not a multiple of 4 bytes");
     }
@@ -41,15 +41,6 @@ static std::vector<uint32_t> readFile(const std::string& filename) {
     return buffer;
 }
 
-static VKAPI_ATTR vk::Bool32 VKAPI_CALL debugCallback(vk::DebugUtilsMessageSeverityFlagBitsEXT       severity,
-                                                      vk::DebugUtilsMessageTypeFlagsEXT              type,
-                                                      const vk::DebugUtilsMessengerCallbackDataEXT * pCallbackData,
-                                                      void *                                         pUserData)
-{
-  std::cerr << "validation layer: type " << to_string(type) << " msg: " << pCallbackData->pMessage << std::endl;
-
-  return vk::False;
-}
 
 inline fs::path get_executable_directory() {
     char result[PATH_MAX];
