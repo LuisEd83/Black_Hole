@@ -358,8 +358,8 @@ std::vector<float> Render::loadPerlinData(const std::string& filename, bool is3d
 void Render::createPerlinTexture() {
 
     int texWidth, texHeight, texDepth;
-        std::vector<float> perlinData = loadPerlinData("data/perlin.txt", true, texWidth, texHeight, texDepth);
-        vk::DeviceSize perlinSize = texWidth * texHeight * texDepth * sizeof(float);
+    std::vector<float> perlinData = loadPerlinData("data/perlin.txt", false, texWidth, texHeight, texDepth);
+    vk::DeviceSize perlinSize = static_cast<vk::DeviceSize>(texWidth * texHeight * texDepth * static_cast<int>(sizeof(float)));
 
     this->perlinTexture.emplace(
         this->device, this->physicalDevice,

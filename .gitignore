@@ -1,8 +1,95 @@
 python/
 output/
-build/
 .cache/
 .clangd
 .gitkeep
 .bh_correction_factor
+*.spv
 
+
+# Build directories
+build/
+cmake-build-*/
+out/
+install/
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+Testing/
+Makefile
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps/
+
+# C++ compile artifacts
+*.o
+*.obj
+*.so
+*.a
+*.dll
+*.dylib
+*.exe
+*.out
+*.app
+*.pdb
+*.ilk
+*.exp
+*.lib
+*.manifest
+*.rsp
+
+# IDE files
+.vscode/
+.idea/
+*.iml
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.vcxproj*
+*.sln
+*.xcodeproj/
+*.xcworkspace/
+*.cbp
+*.layout
+*.depend
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Vulkan / shader generated files
+*.spv
+*.spvasm
+*.vert.spv
+*.frag.spv
+*.comp.spv
+
+# Local tooling state
+.grepai/
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# Debug / profiling
+*.log
+gmon.out
+perf.data*
+
+# Package manager
+vcpkg_installed/
+conanbuildinfo.txt
+conan.lock
+
+data/
+output/
+.planning/

@@ -16,7 +16,7 @@ ConstantBuffer<RenderParams> params;
 Sampler2D starmap;
 
 [[vk::binding(3, 0)]]
-Sampler3D perlin;
+Sampler2D perlin;
 
 float3 getCartesianDirection(Rays s) {
   float st = sin(s.theta);

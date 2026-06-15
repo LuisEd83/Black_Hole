@@ -64,11 +64,11 @@ float dopplerShift(float phi, float r_current, float3 camera_pos, float rs) {
 // ─────────────────────────────────────────────────────────────────────────────────────────────────
 
 
-float perlinNoise(Sampler3D perlin, float r_current, float phi, float disk_r1, float disk_r2) {
+float perlinNoise(Sampler2D perlin, float r_current, float phi, float disk_r1, float disk_r2) {
     float u = (r_current - disk_r1) / (disk_r2 - disk_r1);
     float v = phi / (2.0f * float(PI)) + 0.5f;
 
-    float4 noise = perlin.SampleLevel(float3(u, v, 0.0), 0.0);
+    float4 noise = perlin.SampleLevel(float2(u, v), 0.0);
 
     if (noise.x == 0.0f) return 1.0f;
     
