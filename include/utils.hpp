@@ -6,6 +6,11 @@
 #include <iostream>
 #include <vector>
 #include <string>
+#include <unistd.h>
+#include <limits.h>
+#include <filesystem>
+
+namespace fs = std::filesystem;
 
 static std::vector<uint32_t> readFile(const std::string& filename) {
     std::ifstream file(filename, std::ios::ate | std::ios::binary);
@@ -43,4 +48,14 @@ static VKAPI_ATTR vk::Bool32 VKAPI_CALL debugCallback(vk::DebugUtilsMessageSever
   std::cerr << "validation layer: type " << to_string(type) << " msg: " << pCallbackData->pMessage << std::endl;
 
   return vk::False;
+}
+
+inline fs::path get_executable_directory() {
+    char result[PATH_MAX];
+    ssize_t count = readlink("/proc/self/exe", result, PATH_MAX);
+    if (count == -1) {
+        return fs::current_path(); // Fallback if readlink fails
+    }
+    // Returns the directory containing the binary (e.g., /path/to/project/build/)
+    return fs::path(std::string(result, count)).parent_path();
 }

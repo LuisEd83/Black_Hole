@@ -28,6 +28,7 @@ public:
         m_height(height),
         m_depth(depth),
         m_format(format),
+        m_tiling(tiling),
         m_usage(usage)
     {
         createImage();
@@ -167,7 +168,7 @@ private:
             .mipLevels     = 1,
             .arrayLayers   = 1,
             .samples       = vk::SampleCountFlagBits::e1,
-            .tiling        = vk::ImageTiling::eOptimal,
+            .tiling        = this->m_tiling,
             .usage         = this->m_usage,
             .sharingMode   = vk::SharingMode::eExclusive,
             .initialLayout = vk::ImageLayout::eUndefined
@@ -284,5 +285,6 @@ private:
     uint32_t                m_depth     = 1;
     vk::Format              m_format    = vk::Format::eUndefined;
     vk::DeviceSize          m_size      = 0;
+    vk::ImageTiling			m_tiling	= vk::ImageTiling::eOptimal;
     vk::ImageUsageFlags     m_usage     = {};
 };

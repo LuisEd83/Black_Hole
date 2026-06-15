@@ -1,6 +1,5 @@
 #pragma once
 
-#include "utils.hpp"
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_raii.hpp>
 #include <GLFW/glfw3.h>
@@ -92,4 +91,5 @@ private:
     bool    deviceHasMinimumRequirements(vk::raii::PhysicalDevice physicalDevice);
     static  uint32_t deviceScore(vk::raii::PhysicalDevice const &physicalDevice);
     static  std::vector<const char *> getRequiredInstanceExtensions();
+    void 	setX11WindowIcon();
 };

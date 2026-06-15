@@ -1,6 +1,5 @@
 python/
 output/
-data/
 build/
 .cache/
 .clangd

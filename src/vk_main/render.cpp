@@ -1,3 +1,4 @@
+#include <chrono>
 #include <cmath>
 #include <glm/ext/vector_double3.hpp>
 #include <glm/ext/vector_float3.hpp>
@@ -5,13 +6,14 @@
 #include "vk_main/render.hpp"
 #include "vulkan/vulkan.hpp"
 
-// #include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
 #include <tuple>
 #include <vulkan/vulkan_raii.hpp>
+#include <fstream>
+#include <iostream>
 
 void Render::createCommandPool() {
     vk::CommandPoolCreateInfo poolInfo{.flags            = vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
@@ -739,13 +741,16 @@ void Render::drawFrame() {
 
     // timestampPeriod is in nanoseconds per timestamp unit
     float timestampPeriod = this->physicalDevice.getProperties().limits.timestampPeriod;
-    float computeTimeNs = (timestamps[1] - timestamps[0]) * timestampPeriod;
+    float computeTimeNs = static_cast<float>(timestamps[1] - timestamps[0]) * timestampPeriod;
     this->lastComputeTimeMs = computeTimeNs / 1'000'000.0f;
 
-    // Print every 10 frames for testing
-    static int frameCount = 0;
-    if (++frameCount % 120 == 0) {
-        std::cout << "GPU compute time: " << this->lastComputeTimeMs << " ms/frame (frame " << frameCount << ")" << "(" << 1000.0/this->lastComputeTimeMs << " FPS)"<< std::endl;
+    static auto startTime = std::chrono::high_resolution_clock::now();
+    auto currentTime    = std::chrono::high_resolution_clock::now();
+    float time                      = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+
+    if (time >= 1) {
+        std::cout << "GPU compute time: " << this->lastComputeTimeMs << " ms/frame " << "(" << 1000.0f/this->lastComputeTimeMs << " FPS)"<< std::endl;
+        startTime = currentTime;
     }
 
     this->frameIndex = (this->frameIndex + 1) % MAX_FRAMES_IN_FLIGHT;
@@ -776,11 +781,6 @@ void Render::exportToImage(const std::string& filename, uint32_t width, uint32_t
         .pSetLayouts        = computeLayouts.data()
     };
     auto computeDescriptorSet = this->device.allocateDescriptorSets(computeAllocInfo);
-
-    double cam_dist = 12.0;  // CAMERA_FACTOR
-    double x_coef = 1.0;
-    double y_coef = 1.1;
-    double z_coef = 0.7;
 
     this->cameraPos = glm::dvec3(13.0, 16.0, -7.37);
 

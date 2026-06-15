@@ -1,4 +1,6 @@
 #include "vk_init/setup.hpp"
+#include "vk_main/render.hpp"
+#include "utils.hpp"
 
 #include <GLFW/glfw3.h>
 #include <algorithm>
@@ -10,6 +12,10 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <filesystem>
+#include <iostream>
+
+namespace fs = std::filesystem;
 
 const std::vector<char const *> Setup::validationLayers = {
     "VK_LAYER_KHRONOS_validation"};
@@ -35,15 +41,116 @@ void Setup::framebufferResizeCallback(GLFWwindow* window, int width, int height)
     app->framebufferResized = true;
 }
 
+std::string get_embedded_desktop_string(const fs::path& exe_dir) {
+    return "[Desktop Entry]\n"
+           "Type=Application\n"
+           "Name=Black Hole Sim\n"
+           "Exec=" + (exe_dir / "black_hole_sim").string() +"\n"
+           "Icon=com.blackhole.blackhole_app\n"
+           "Terminal=false\n";
+}
+
+void initialize_wayland_assets() {
+    const char* home_env = std::getenv("HOME");
+    if (!home_env) return;
+    
+    fs::path local_share = fs::path(home_env) / ".local" / "share";
+    std::string app_id = "com.blackhole.blackhole_app";
+
+    try {
+    	fs::path exe_dir = get_executable_directory();
+     	fs::path project_root = exe_dir.parent_path();
+        std::vector<int> target_sizes = {16, 32, 256, 512};
+        
+        for (int size : target_sizes) {
+            std::string size_str = std::to_string(size);
+            
+            // 1. Map your project's local source icon path
+            fs::path source_icon = project_root / "icons" / ("icon_" + size_str + "x" + size_str + ".png");
+            
+            // Skip this size if the file doesn't exist in your project folder
+            if (!fs::exists(source_icon)) continue;
+
+            // 2. Create the target Freedesktop directory structure
+            fs::path target_dir = local_share / "icons" / "hicolor" / (size_str + "x" + size_str) / "apps";
+            fs::create_directories(target_dir);
+
+            // 3. Copy the file directly over (overwrite existing cached versions)
+            fs::path target_icon = target_dir / (app_id + ".png");
+            fs::copy_file(source_icon, target_icon, fs::copy_options::overwrite_existing);
+        }
+
+        // 4. Create and write the .desktop launcher configuration
+        fs::path desktop_dir = local_share / "applications";
+        fs::create_directories(desktop_dir);
+        
+        fs::path desktop_file = desktop_dir / (app_id + ".desktop");
+        std::ofstream out_desktop(desktop_file);
+        out_desktop << get_embedded_desktop_string(exe_dir);
+        out_desktop.close();
+
+        // 5. Force the compositor / shell to refresh system indexing tables
+        std::system("gtk-update-icon-cache -f -t ~/.local/share/icons/hicolor > /dev/null 2>&1");
+        std::system("update-desktop-database ~/.local/share/applications > /dev/null 2>&1");
+
+    } catch (const std::exception& e) {
+        std::cerr << "Failed to copy Wayland assets: " << e.what() << std::endl;
+    }
+}
+
+void Setup::setX11WindowIcon() {
+	
+	std::vector<int> sizes = {16, 32, 128, 512};
+    std::vector<GLFWimage> icons;
+    
+    for (int size : sizes) {
+    	std::string filename = "icons/icon_" + std::to_string(size) + "x" + std::to_string(size) + ".png";
+          
+        GLFWimage icon;
+        icon.width = 0;
+        icon.height = 0;
+        icon.pixels = stbi_load(filename.c_str(), &icon.width, &icon.height, nullptr, STBI_rgb_alpha);
+        
+        if (icon.pixels != nullptr) {
+            icons.push_back(icon);
+        } else {
+            fprintf(stderr, "Warning: Failed to load icon %s: %s\n", filename.c_str(), stbi_failure_reason());
+        }
+    }
+    
+      if (!icons.empty()) {
+          glfwSetWindowIcon(this->window, static_cast<int>(icons.size()), icons.data());
+      }
+    
+      for (auto& icon : icons) {
+          stbi_image_free(icon.pixels);
+      }
+}
+
 void Setup::initWindow() {
   glfwInit();
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
   glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
+  
+  if (glfwGetPlatform() == GLFW_PLATFORM_WAYLAND) {
+  		std::cout << "Platform: Wayland" << std::endl;
+        // Provision files before the window mapping sequence starts
+        initialize_wayland_assets();
+        
+        // This MUST exactly match the base filename of your desktop file
+        glfwWindowHintString(GLFW_WAYLAND_APP_ID, "com.blackhole.blackhole_app");
+  }
 
   this->window = glfwCreateWindow(WIDTH, HEIGHT, "Black Hole Sim - Vulkan", nullptr, nullptr);
 
   glfwSetWindowUserPointer(this->window, this);
   glfwSetFramebufferSizeCallback(this->window, framebufferResizeCallback);
+
+  if (glfwGetPlatform() == GLFW_PLATFORM_X11) {
+  	std::cout << "Platform: X11" << std::endl;
+ 	this->setX11WindowIcon();
+  }
+
 }
 
 void Setup::createInstance() {
@@ -121,15 +228,15 @@ void Setup::setupDebugMessenger() {
       inst.createDebugUtilsMessengerEXT(debugUtilsMessengerCreateInfoEXT);
 }
 
-bool Setup::deviceHasMinimumRequirements(vk::raii::PhysicalDevice physicalDevice) {
+bool Setup::deviceHasMinimumRequirements(vk::raii::PhysicalDevice physicalDev) {
   // Check minimum API version
   bool supportsVulkan1_3 =
-      physicalDevice.getProperties().apiVersion >= DeviceCapabilities::minimumApiVersion;
+      physicalDev.getProperties().apiVersion >= DeviceCapabilities::minimumApiVersion;
 
   // Check required hardware capabilities
   bool hasGeometryShader = !DeviceCapabilities::requireGeometryShader ||
-                           physicalDevice.getFeatures().geometryShader;
-  auto queueFamilies = physicalDevice.getQueueFamilyProperties();
+                           physicalDev.getFeatures().geometryShader;
+  auto queueFamilies = physicalDev.getQueueFamilyProperties();
   bool supportsGraphics = !DeviceCapabilities::requireGraphicsQueue ||
       std::ranges::any_of(queueFamilies, [](auto const &qfp) {
         return !!(qfp.queueFlags & vk::QueueFlagBits::eGraphics);
@@ -137,7 +244,7 @@ bool Setup::deviceHasMinimumRequirements(vk::raii::PhysicalDevice physicalDevice
 
   // Check required extensions
   auto availableDeviceExtensions =
-      physicalDevice.enumerateDeviceExtensionProperties();
+      physicalDev.enumerateDeviceExtensionProperties();
   bool supportsAllRequiredExtensions = std::ranges::all_of(
       DeviceCapabilities::requiredExtensions,
       [&availableDeviceExtensions](auto const &requiredExtension) {
@@ -150,7 +257,7 @@ bool Setup::deviceHasMinimumRequirements(vk::raii::PhysicalDevice physicalDevice
       });
 
   // Check required features (must match RequiredFeatures struct)
-  auto features = physicalDevice.template getFeatures2<
+  auto features = physicalDev.template getFeatures2<
       vk::PhysicalDeviceFeatures2, vk::PhysicalDeviceVulkan11Features,
       vk::PhysicalDeviceVulkan13Features,
       vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>();
@@ -172,20 +279,19 @@ bool Setup::deviceHasMinimumRequirements(vk::raii::PhysicalDevice physicalDevice
          supportsAllRequiredExtensions && supportsRequiredFeatures;
 }
 
-uint32_t Setup::deviceScore(vk::raii::PhysicalDevice const &physicalDevice) {
-    auto deviceProperties = physicalDevice.getProperties();
-    auto deviceFeatures = physicalDevice.getFeatures();
+uint32_t Setup::deviceScore(vk::raii::PhysicalDevice const &physicalDev) {
+    auto deviceProperties = physicalDev.getProperties();
 
-    auto vram = [physicalDevice]() {
-      auto memoryProperties = physicalDevice.getMemoryProperties();
-      uint64_t vram = 0;
+    auto vram = [physicalDev]() {
+      auto memoryProperties = physicalDev.getMemoryProperties();
+      uint64_t vid_mem = 0;
       for (uint32_t i = 0; i < memoryProperties.memoryHeapCount; i++) {
         if (memoryProperties.memoryHeaps[i].flags &
             vk::MemoryHeapFlagBits::eDeviceLocal) {
-          vram += memoryProperties.memoryHeaps[i].size;
+          vid_mem += memoryProperties.memoryHeaps[i].size;
         }
       }
-      return vram;
+      return vid_mem;
     }();
 
     uint32_t score = 0;
@@ -219,11 +325,11 @@ void Setup::pickPhysicalDevice() {
 
   std::multimap<int, vk::raii::PhysicalDevice> candidates;
 
-  for (auto &physicalDevice : physicalDevices) {
-    if (!deviceHasMinimumRequirements(physicalDevice))
+  for (auto &physicalDev : physicalDevices) {
+    if (!deviceHasMinimumRequirements(physicalDev))
       continue;
     candidates.insert(
-        std::make_pair(deviceScore(physicalDevice), physicalDevice));
+        std::make_pair(deviceScore(physicalDev), physicalDev));
   }
 
   if (!candidates.empty() && candidates.rbegin()->first > 0) {
@@ -239,20 +345,20 @@ void Setup::pickPhysicalDevice() {
 void Setup::createLogicalDevice() {
     std::vector<vk::QueueFamilyProperties> queueFamilyProperties = physicalDevice.getQueueFamilyProperties();
 
-    uint32_t queueIndex = ~0;
+    uint32_t queueIdx = ~0;
     for (uint32_t qfpIndex = 0; qfpIndex < queueFamilyProperties.size(); qfpIndex++) {
       if ((queueFamilyProperties[qfpIndex].queueFlags & vk::QueueFlagBits::eGraphics) &&
           physicalDevice.getSurfaceSupportKHR(qfpIndex, *surface)) {
-        queueIndex = qfpIndex;
+        queueIdx = qfpIndex;
         break;
       }
     }
 
-    if (queueIndex == ~0) {
+    if (queueIdx == ~0) {
       throw std::runtime_error("Could not find a queue for graphics and present -> terminating");
     }
 
-    this->queueIndex = queueIndex;
+    this->queueIndex = queueIdx;
 
     auto graphicsQueueFamilyProperty = std::ranges::find_if(queueFamilyProperties, [](auto const &qfp) { return (qfp.queueFlags & vk::QueueFlagBits::eGraphics) != static_cast<vk::QueueFlags>(0); });
     auto graphicsIndex = static_cast<uint32_t>(std::distance(queueFamilyProperties.begin(), graphicsQueueFamilyProperty));
@@ -301,9 +407,9 @@ vk::raii::ImageView Setup::createImageView(vk::Image const &image, vk::Format fo
 void Setup::pickPhysicalDeviceHeadless() {
     // Same as pickPhysicalDevice but without surface support check
     std::multimap<uint32_t, vk::raii::PhysicalDevice> candidates;
-    for (const auto& physicalDevice : this->inst.enumeratePhysicalDevices()) {
-        if (deviceHasMinimumRequirements(physicalDevice)) {
-            candidates.insert(std::make_pair(deviceScore(physicalDevice), physicalDevice));
+    for (const auto& physicalDev : this->inst.enumeratePhysicalDevices()) {
+        if (deviceHasMinimumRequirements(physicalDev)) {
+            candidates.insert(std::make_pair(deviceScore(physicalDev), physicalDev));
         }
     }
 
@@ -320,20 +426,20 @@ void Setup::createLogicalDeviceHeadless() {
     std::vector<vk::QueueFamilyProperties> queueFamilyProperties = physicalDevice.getQueueFamilyProperties();
 
     // Find a queue that supports compute (and graphics for transfer)
-    uint32_t queueIndex = ~0;
+    uint32_t queueIdx = ~0;
     for (uint32_t qfpIndex = 0; qfpIndex < queueFamilyProperties.size(); qfpIndex++) {
         if ((queueFamilyProperties[qfpIndex].queueFlags & vk::QueueFlagBits::eCompute) &&
             (queueFamilyProperties[qfpIndex].queueFlags & vk::QueueFlagBits::eGraphics)) {
-            queueIndex = qfpIndex;
+            queueIdx = qfpIndex;
             break;
         }
     }
 
-    if (queueIndex == ~0) {
+    if (queueIdx == ~0) {
         throw std::runtime_error("Could not find a queue with compute support for headless rendering");
     }
 
-    this->queueIndex = queueIndex;
+    this->queueIndex = queueIdx;
 
     auto graphicsQueueFamilyProperty = std::ranges::find_if(queueFamilyProperties, [](auto const &qfp) {
         return (qfp.queueFlags & vk::QueueFlagBits::eGraphics) != static_cast<vk::QueueFlags>(0);
@@ -350,7 +456,6 @@ void Setup::createLogicalDeviceHeadless() {
     // Build feature chain dynamically
     vk::PhysicalDeviceFeatures2 physicalDeviceFeatures2 = physicalDevice.getFeatures2();
     vk::PhysicalDeviceVulkan13Features* vulkan13Features = nullptr;
-    vk::PhysicalDeviceVulkan12Features* vulkan12Features = nullptr;
     void* pNextChain = nullptr;
 
     if (physicalDeviceFeatures2.features.samplerAnisotropy) {
@@ -370,19 +475,10 @@ void Setup::createLogicalDeviceHeadless() {
         }
     }
 
-    // Check if Vulkan 1.2 features are available
-    if (physicalDevice.getProperties().apiVersion >= vk::ApiVersion12) {
-        vulkan12Features = reinterpret_cast<vk::PhysicalDeviceVulkan12Features*>(pNextChain);
-        // shaderFloat64 is a Vulkan 1.0 feature, not a Vulkan 1.2 feature
-        // It's already set in physicalDeviceFeatures2.features above
-    }
-
     vk::DeviceCreateInfo deviceCreateInfo {
         .pNext                      = featureChain,
         .queueCreateInfoCount       = 1,
         .pQueueCreateInfos          = &deviceQueueCreateInfo,
-        .enabledLayerCount          = static_cast<uint32_t>(Setup::validationLayers.size()),
-        .ppEnabledLayerNames        = Setup::validationLayers.data(),
         .enabledExtensionCount      = static_cast<uint32_t>(DeviceCapabilities::requiredExtensions.size()),
         .ppEnabledExtensionNames    = DeviceCapabilities::requiredExtensions.data()
     };
