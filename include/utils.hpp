@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <vulkan/vulkan.hpp>
 #include <GLFW/glfw3.h>
 #include <fstream>
@@ -57,5 +58,5 @@ inline fs::path get_executable_directory() {
         return fs::current_path(); // Fallback if readlink fails
     }
     // Returns the directory containing the binary (e.g., /path/to/project/build/)
-    return fs::path(std::string(result, count)).parent_path();
+    return fs::path(std::string(result, static_cast<size_t>(count))).parent_path();
 }

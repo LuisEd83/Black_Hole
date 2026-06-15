@@ -11,16 +11,16 @@ void Presentation::createSurface() {
     // GLFW is a C library and returns a VkSurfaceKHR handle. We must
     // wrap it in vk::raii::SurfaceKHR immediately. If the RAII constructor
     // throws, we destroy the raw handle manually to prevent a leak.
-    VkSurfaceKHR surface;
-    VkResult result = glfwCreateWindowSurface(*this->inst, this->window, nullptr, &surface);
+    VkSurfaceKHR surf;
+    VkResult result = glfwCreateWindowSurface(*this->inst, this->window, nullptr, &surf);
     if (result != VK_SUCCESS) {
         throw std::runtime_error("failed to create window surface!");
     }
 
     try {
-        this->surface = vk::raii::SurfaceKHR(this->inst, surface);
+        this->surface = vk::raii::SurfaceKHR(this->inst, surf);
     } catch (...) {
-        vkDestroySurfaceKHR(*this->inst, surface, nullptr);
+        vkDestroySurfaceKHR(*this->inst, surf, nullptr);
         throw;
     }
 }

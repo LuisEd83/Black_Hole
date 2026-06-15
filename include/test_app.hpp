@@ -1,6 +1,7 @@
 #pragma once
 
 #include "vk_main/render.hpp"
+#include <GLFW/glfw3.h>
 #include <iomanip>
 
 class VulkanTestApp : public Render {
@@ -14,9 +15,9 @@ public:
 
     void exportFrame(const std::string& filename, uint32_t width, uint32_t height) {
         this->initWindow();
-        this->initVulkan();
-        this->mainLoopExport(filename, width, height);
-        this->cleanup();
+        this->initVulkanHeadless();
+        this->exportToImage(filename, width, height);
+        glfwDestroyWindow(this->window);
     }
 
 private:
@@ -31,7 +32,7 @@ private:
         this->createComputePipeline();
         this->createGraphicsPipeline();
         this->createCommandPool();
-        this->createTexture();
+        this->createStarmapTexture();
         this->createPerlinTexture();
         this->createStorageImage();
         this->createUniformBuffers();
@@ -41,6 +42,18 @@ private:
         this->createSyncObjects();
         this->createQueryPool();
     }
+
+    void initVulkanHeadless() {
+   	this->createInstance();
+        this->setupDebugMessenger();
+        this->pickPhysicalDeviceHeadless();
+        this->createLogicalDeviceHeadless();
+        this->createComputePipeline();
+        this->createCommandPool();
+        this->createStarmapTexture();
+        this->createPerlinTexture();
+        this->createDescriptorPool();
+    };
 
     void mainLoop() {
         while (!glfwWindowShouldClose(this->window)) {

@@ -268,10 +268,10 @@ void Render::copyBuffer(vk::raii::Buffer & srcBuffer, vk::raii::Buffer & dstBuff
       endSingleTimeCommands(std::move(commandCopyBuffer));
 }
 
-void Render::createTexture() {
+void Render::createStarmapTexture() {
     int             texWidth, texHeight, texChannels;
     stbi_uc         *pixels     = stbi_load("data/starmap.png", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
-    vk::DeviceSize  imageSize   = texWidth * texHeight * 4;
+    vk::DeviceSize  imageSize   = static_cast<vk::DeviceSize>(texWidth * texHeight * 4);
 
     if (!pixels) {
             throw std::runtime_error("Failed to load texture image!");
@@ -776,7 +776,7 @@ void Render::exportToImage(const std::string& filename, uint32_t width, uint32_t
     // Create a temporary descriptor set
     std::vector<vk::DescriptorSetLayout> computeLayouts(1, *this->computeDescriptorSetLayout);
     vk::DescriptorSetAllocateInfo computeAllocInfo{
-        .descriptorPool     = descriptorPool,
+        .descriptorPool     = this->descriptorPool,
         .descriptorSetCount = 1,
         .pSetLayouts        = computeLayouts.data()
     };
@@ -795,8 +795,8 @@ void Render::exportToImage(const std::string& filename, uint32_t width, uint32_t
 
     // Update uniform buffer
     RenderParams renderParams{
-        .width  = (int32_t) width,
-        .height = (int32_t) height,
+        .width  = static_cast<int32_t>(width),
+        .height = static_cast<int32_t>(height),
         .pos    = this->cameraPos,
         .fwd    = this->cameraFwd,
         .right  = this->cameraRight,

@@ -76,7 +76,7 @@ public:
     void createSyncObjects();
     void createQueryPool();
     void createPerlinTexture();
-    void createTexture();
+    void createStarmapTexture();
     void createStorageImage();
     void createUniformBuffers();
     void recordCommandBuffer(uint32_t imageIndex);

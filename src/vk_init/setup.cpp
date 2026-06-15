@@ -14,6 +14,7 @@
 #include <vector>
 #include <filesystem>
 #include <iostream>
+#include <vulkan/vulkan.hpp>
 
 namespace fs = std::filesystem;
 
@@ -345,7 +346,7 @@ void Setup::pickPhysicalDevice() {
 void Setup::createLogicalDevice() {
     std::vector<vk::QueueFamilyProperties> queueFamilyProperties = physicalDevice.getQueueFamilyProperties();
 
-    uint32_t queueIdx = ~0;
+    uint32_t queueIdx = UINT32_MAX;
     for (uint32_t qfpIndex = 0; qfpIndex < queueFamilyProperties.size(); qfpIndex++) {
       if ((queueFamilyProperties[qfpIndex].queueFlags & vk::QueueFlagBits::eGraphics) &&
           physicalDevice.getSurfaceSupportKHR(qfpIndex, *surface)) {
@@ -354,7 +355,7 @@ void Setup::createLogicalDevice() {
       }
     }
 
-    if (queueIdx == ~0) {
+    if (queueIdx == UINT32_MAX) {
       throw std::runtime_error("Could not find a queue for graphics and present -> terminating");
     }
 
@@ -426,7 +427,7 @@ void Setup::createLogicalDeviceHeadless() {
     std::vector<vk::QueueFamilyProperties> queueFamilyProperties = physicalDevice.getQueueFamilyProperties();
 
     // Find a queue that supports compute (and graphics for transfer)
-    uint32_t queueIdx = ~0;
+    uint32_t queueIdx = UINT32_MAX;
     for (uint32_t qfpIndex = 0; qfpIndex < queueFamilyProperties.size(); qfpIndex++) {
         if ((queueFamilyProperties[qfpIndex].queueFlags & vk::QueueFlagBits::eCompute) &&
             (queueFamilyProperties[qfpIndex].queueFlags & vk::QueueFlagBits::eGraphics)) {
@@ -435,7 +436,7 @@ void Setup::createLogicalDeviceHeadless() {
         }
     }
 
-    if (queueIdx == ~0) {
+    if (queueIdx == UINT32_MAX) {
         throw std::runtime_error("Could not find a queue with compute support for headless rendering");
     }
 
@@ -453,36 +454,28 @@ void Setup::createLogicalDeviceHeadless() {
         .pQueuePriorities = &queuePriority
     };
 
-    // Build feature chain dynamically
-    vk::PhysicalDeviceFeatures2 physicalDeviceFeatures2 = physicalDevice.getFeatures2();
-    vk::PhysicalDeviceVulkan13Features* vulkan13Features = nullptr;
-    void* pNextChain = nullptr;
-
-    if (physicalDeviceFeatures2.features.samplerAnisotropy) {
-        physicalDeviceFeatures2.features.samplerAnisotropy = VK_TRUE;
-    }
-    physicalDeviceFeatures2.features.shaderFloat64 = VK_TRUE;
-
-    auto* featureChain = &physicalDeviceFeatures2;
-    pNextChain = physicalDeviceFeatures2.pNext;
-
-    // Check if Vulkan 1.3 features are available
-    if (physicalDevice.getProperties().apiVersion >= vk::ApiVersion13) {
-        vulkan13Features = reinterpret_cast<vk::PhysicalDeviceVulkan13Features*>(pNextChain);
-        if (vulkan13Features && vulkan13Features->synchronization2 && vulkan13Features->dynamicRendering) {
-            vulkan13Features->synchronization2 = VK_TRUE;
-            vulkan13Features->dynamicRendering = VK_TRUE;
-        }
-    }
-
-    vk::DeviceCreateInfo deviceCreateInfo {
-        .pNext                      = featureChain,
-        .queueCreateInfoCount       = 1,
-        .pQueueCreateInfos          = &deviceQueueCreateInfo,
-        .enabledExtensionCount      = static_cast<uint32_t>(DeviceCapabilities::requiredExtensions.size()),
-        .ppEnabledExtensionNames    = DeviceCapabilities::requiredExtensions.data()
-    };
-
+    // Enable the same features as createLogicalDevice() — explicit chain, not dynamic discovery.
+        // The reinterpret_cast + getFeatures2 pNext approach doesn't properly link the chain.
+        vk::StructureChain<vk::PhysicalDeviceFeatures2,
+                           vk::PhysicalDeviceVulkan11Features,
+                           vk::PhysicalDeviceVulkan13Features,
+                           vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>
+                           featureChain = {
+                               {.features = {.samplerAnisotropy = requiredFeatures.samplerAnisotropy, .shaderFloat64 = requiredFeatures.shaderFloat64}},
+                               {.shaderDrawParameters = requiredFeatures.shaderDrawParameters},
+                               {.synchronization2 = requiredFeatures.synchronization2,
+                                .dynamicRendering = requiredFeatures.dynamicRendering},
+                               {.extendedDynamicState = requiredFeatures.extendedDynamicState}
+                           };
+    
+        vk::DeviceCreateInfo deviceCreateInfo {
+            .pNext                      = &featureChain.get<vk::PhysicalDeviceFeatures2>(),
+            .queueCreateInfoCount       = 1,
+            .pQueueCreateInfos          = &deviceQueueCreateInfo,
+            .enabledExtensionCount      = static_cast<uint32_t>(DeviceCapabilities::requiredExtensions.size()),
+            .ppEnabledExtensionNames    = DeviceCapabilities::requiredExtensions.data()
+        };
+    
     this->device = vk::raii::Device(this->physicalDevice, deviceCreateInfo);
     this->graphicsQueue = vk::raii::Queue(this->device, graphicsIndex, 0);
 }
