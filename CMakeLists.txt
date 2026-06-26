@@ -223,3 +223,32 @@ endif()
 set_target_properties(black_hole_sim PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/build
 )
+
+# ───────────────────────────────────────────────────────────────
+# Targets de execução
+# ───────────────────────────────────────────────────────────────
+
+# Roda a simulação interativa normalmente
+add_custom_target(run
+    COMMAND ${CMAKE_CURRENT_LIST_DIR}/build/black_hole_sim
+    WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
+    DEPENDS black_hole_sim
+    COMMENT "Rodando simulação..."
+)
+
+# Exporta dados do disco e plota automaticamente
+add_custom_target(disk
+    COMMAND ${CMAKE_CURRENT_LIST_DIR}/build/black_hole_sim --disk 200
+    COMMAND python3 ${CMAKE_CURRENT_LIST_DIR}/python/plot_disk.py --save
+    WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
+    DEPENDS black_hole_sim
+    COMMENT "Exportando dados do disco e gerando plots..."
+)
+
+# Exporta frame PNG
+add_custom_target(export
+    COMMAND ${CMAKE_CURRENT_LIST_DIR}/build/black_hole_sim --export icons/output.png 1920 1080
+    WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
+    DEPENDS black_hole_sim
+    COMMENT "Exportando frame PNG..."
+)
