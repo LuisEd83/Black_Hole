@@ -83,6 +83,7 @@ public:
     void recreateStorageImage();
     void drawFrame();
     void exportToImage(const std::string& filename, uint32_t width, uint32_t height);
+    void exportDiskData(int n_rings = 200);
     
 
 private:

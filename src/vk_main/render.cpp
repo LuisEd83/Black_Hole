@@ -5,7 +5,9 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "vk_main/render.hpp"
 #include "vulkan/vulkan.hpp"
+#include "disk_physics.hpp"
 
+#include <iomanip>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -898,4 +900,127 @@ void Render::exportToImage(const std::string& filename, uint32_t width, uint32_t
     uniformBufferMemory.unmapMemory();
 
     std::cout << "Exported frame to " << filename << " (" << width << "x" << height << ")" << std::endl;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Calcula as propriedades físicas do disco de acreção anel por anel e
+// exporta para data/disk_data.csv.
+//
+// NÃO usa Vulkan, NÃO usa shader — física analítica pura em C++.
+// Reutiliza: RS (constants.slang), cameraPos (estado da câmera),
+//            DiskPhysics:: (porta de effects.slang).
+//
+// Para adicionar ao projeto:
+//   1. Copiar disk_physics.hpp para include/
+//   2. Colar este bloco em render.cpp (junto com exportToImage)
+//   3. Declarar em render.hpp: void exportDiskData(int n_rings = 200);
+// ─────────────────────────────────────────────────────────────────────────────
+
+// No topo de render.cpp, adicionar:
+// #include "disk_physics.hpp"
+// #include <fstream>   (já incluso)
+// #include <iomanip>
+
+void Render::exportDiskData(int n_rings)
+{
+    // ── Constantes físicas ────────────────────────────────────────────────────
+    // RS_PHYS: raio de Schwarzschild real de Sgr A* (mesmo valor de constants.slang)
+    constexpr double RS_PHYS = 1.2683881740e10; // metros  (2GM/c² para BH_MASS = 8.54e36 kg)
+
+    // Limites do disco em unidades de RS (normalizadas, como no shader)
+    const double disk_r1 = DiskPhysics::RS * DiskPhysics::DISK_R1_FACTOR;  // 3.0 * RS
+    const double disk_r2 = DiskPhysics::RS * DiskPhysics::DISK_R2_FACTOR;  // 13.0 * RS
+    const double r_isco  = disk_r1; // ISCO de Schwarzschild = 3 RS
+
+    // Posição da câmera — reutiliza o estado atual (igual a exportToImage)
+    // Se cameraPos ainda não foi inicializado, usa o valor padrão do shader
+    double cam_x = this->cameraPos.x;
+    double cam_y = this->cameraPos.y;
+    double cam_z = this->cameraPos.z;
+
+    if (!this->cameraInitialized) {
+        cam_x = 12.0 * 1.0;   // CAMERA_FACTOR * X_COEF
+        cam_y = 12.0 * 1.1;   // CAMERA_FACTOR * Y_COEF
+        cam_z = 12.0 * 0.7;   // CAMERA_FACTOR * Z_COEF
+    }
+
+    // ── Grid de anéis ────────────────────────────────────────────────────────
+    double dr = (disk_r2 - disk_r1) / static_cast<double>(n_rings);
+
+    std::vector<DiskPhysics::RingData> rings;
+    rings.reserve(n_rings);
+
+    for (int i = 0; i < n_rings; ++i)
+    {
+        double r = disk_r1 + (i + 0.5) * dr; // centro do anel
+
+        DiskPhysics::RingData ring;
+        ring.r        = r;
+        ring.r_phys   = r * RS_PHYS;
+
+        // emissividade no plano equatorial (z = 0)
+        ring.emissivity = DiskPhysics::diskEmissivity(r, 0.0, disk_r1, disk_r2);
+
+        // temperatura normalizada — Novikov-Thorne
+        ring.temp_norm  = DiskPhysics::novikovThorneTemp(r, r_isco);
+
+        // redshift gravitacional
+        ring.redshift   = DiskPhysics::redShift(r);
+
+        // doppler: amostramos phi = 0 (lado frontal) e phi = π (lado traseiro)
+        // phi = 0   → lado onde a velocidade orbital aponta para a câmera
+        // phi = π   → lado oposto
+        ring.doppler_front = DiskPhysics::dopplerShift(0.0,          r, cam_x, cam_y, cam_z);
+        ring.doppler_back  = DiskPhysics::dopplerShift(M_PI,         r, cam_x, cam_y, cam_z);
+
+        // luminosidade do anel: emissividade * área do anel (2πR dR)
+        ring.luminosity = DiskPhysics::ringLuminosity(r, dr, disk_r1, disk_r2);
+
+        // energia observada: modulada por doppler (lado brilhante) e redshift
+        // beam_effect = D^3 (como no shader: 3 fatores de aberração)
+        double beam = std::pow(std::max(ring.doppler_front, 0.01), 3.0);
+        ring.energy_obs = ring.emissivity * beam * ring.redshift;
+
+        rings.push_back(ring);
+    }
+
+    // ── Escrita do CSV ───────────────────────────────────────────────────────
+    const std::string path = "data/disk_data.csv";
+    std::ofstream file(path);
+
+    if (!file.is_open()) {
+        throw std::runtime_error("[exportDiskData] Falha ao abrir: " + path);
+    }
+
+    // cabeçalho — cada coluna tem nome direto para o Python ler com pandas
+    file << "r_rs,"           // raio em unidades de RS
+         << "r_phys_m,"       // raio em metros
+         << "emissivity,"     // emissividade (perfil gaussiano * temperatura)
+         << "temp_norm,"      // temperatura normalizada 0-1 (Novikov-Thorne)
+         << "redshift,"       // fator de redshift gravitacional sqrt(1 - rs/r)
+         << "doppler_front,"  // fator Doppler no lado que se aproxima (phi=0)
+         << "doppler_back,"   // fator Doppler no lado que se afasta (phi=π)
+         << "luminosity,"     // luminosidade do anel (emiss * 2πR dR)
+         << "energy_obs\n";   // energia observada (emiss * D^3 * redshift)
+
+    file << std::fixed << std::setprecision(8);
+
+    for (const auto& ring : rings) {
+        file << ring.r            << ","
+             << ring.r_phys       << ","
+             << ring.emissivity   << ","
+             << ring.temp_norm    << ","
+             << ring.redshift     << ","
+             << ring.doppler_front << ","
+             << ring.doppler_back  << ","
+             << ring.luminosity   << ","
+             << ring.energy_obs   << "\n";
+    }
+
+    file.close();
+
+    std::cout << "[exportDiskData] " << n_rings << " anéis exportados → " << path << "\n";
+    std::cout << "  disco: [" << disk_r1 << ", " << disk_r2 << "] RS"
+              << " | dR = " << dr << " RS\n";
+    std::cout << "  câmera: (" << cam_x << ", " << cam_y << ", " << cam_z << ")\n";
 }
