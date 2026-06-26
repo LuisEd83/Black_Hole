@@ -20,6 +20,11 @@ public:
         glfwDestroyWindow(this->window);
     }
 
+    void exportDisk(int n_rings = 200) {
+        this->initVulkanHeadless();
+        this->exportDiskData(n_rings);
+    }
+
 private:
     void initVulkan() {
         this->createInstance();
