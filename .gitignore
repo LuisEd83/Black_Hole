@@ -5,7 +5,7 @@ output/
 .gitkeep
 .bh_correction_factor
 *.spv
-
+sim
 
 # Build directories
 build/

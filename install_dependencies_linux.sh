@@ -4,10 +4,13 @@ echo "Installing dependencies for Vulkan Tutorial..."
 
 # Function to detect the package manager
 detect_package_manager() {
+
     if command -v apt-get &> /dev/null; then
         echo "apt"
+    
     elif command -v dnf &> /dev/null; then
         echo "dnf"
+ 
     elif command -v pacman &> /dev/null; then
         echo "pacman"
     else
@@ -15,10 +18,15 @@ detect_package_manager() {
     fi
 }
 
+
+# ──────────────────────────────────────────────────────────────────────────────────────────────────
+
+
 # Install dependencies based on the package manager
 PACKAGE_MANAGER=$(detect_package_manager)
 
 case $PACKAGE_MANAGER in
+    
     apt)
         echo "Detected Ubuntu/Debian-based system"
         echo "Installing build essentials..."
@@ -52,6 +60,7 @@ case $PACKAGE_MANAGER in
         echo "Installing slang compiler..."
         sudo apt-get install -y slang-compiler
         ;;
+
     dnf)
         echo "Detected Fedora/RHEL-based system"
         echo "Installing build essentials..."
@@ -78,6 +87,7 @@ case $PACKAGE_MANAGER in
         echo "Installing clang compiler..."
         sudo dnf install -y clang
         ;;
+         
     pacman)
         echo "Detected Arch-based system"
         echo "Installing build essentials..."
@@ -104,6 +114,7 @@ case $PACKAGE_MANAGER in
         echo "Installing slang compiler..."
         sudo pacman -S --needed slang
         ;;
+
     *)
         echo "Unsupported package manager. Please install the following packages manually:"
         echo "- build-essential or equivalent (gcc, g++, make)"
@@ -119,7 +130,12 @@ case $PACKAGE_MANAGER in
         echo "- clang compiler"
         exit 1
         ;;
+
 esac
+
+
+# ──────────────────────────────────────────────────────────────────────────────────────────────────
+
 
 # Vulkan SDK installation instructions
 echo ""
@@ -145,3 +161,6 @@ echo "cmake -B build -S . -G Ninja"
 echo "cmake --build build"
 
 exit 0
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
