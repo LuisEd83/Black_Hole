@@ -1,7 +1,4 @@
-# 🕳️ Black Hole — Vulkan Edition
-
-> Renderização de buracos negros usando **Ray Tracing**, **Vulkan compute** e **Vulkan graphics**.  
-> Conversão do projeto acadêmico original com foco em renderização física e paralelismo em GPU.
+# 🕳️ Black Hole 
 
 ---
 
@@ -23,7 +20,7 @@
 
 ## 🌌 Sobre o Projeto
 
-**Black Hole — Vulkan Edition** é a conversão Vulkan do simulador físico e visual de buraco negro original desenvolvido em C++/CUDA. O objetivo é calcular com precisão como raios de luz se comportam próximos ao campo gravitacional intenso de um corpo compacto — e renderizar esse resultado em tempo real usando uma única API gráfica moderna.
+**Black Hole** é um simulador físico e visual de buracos negros desenvolvido em C++/Vulkan/CUDA. O objetivo é calcular com precisão como raios de luz se comportam próximos ao campo gravitacional intenso de um corpo compacto — e renderizar esse resultado em tempo real usando uma única API gráfica moderna.
 
 O cálculo das geodésicas (trajetórias dos fótons no espaço-tempo curvo de Schwarzschild) é executado em um **compute shader Vulkan** com suporte a `shaderFloat64`. A composição final da cena ocorre via **Vulkan graphics** com dynamic rendering e um quad em tela cheia. Como objeto de estudo, usamos o buraco negro supermassivo da Via Láctea: **Sagittarius A\***.
 
@@ -73,7 +70,7 @@ O compute shader escreve os pixels **diretamente em uma imagem `VK_IMAGE_USAGE_S
 - Double buffering (`MAX_FRAMES_IN_FLIGHT = 2`) para paralelismo CPU-GPU
 - Suporte a redimensionamento de janela com recriação de swapchain
 - Validation layers ativadas em builds de debug
-- Build limpo com zero warnings do compilador (C++20 estrito)
+- Build em C++20 estrito; warnings restantes são majoritariamente conversões de sinal e casts antigos, não erros
 - Multiplataforma: **Linux**, **macOS** (MoltenVK) e **Windows**
 
 ---
@@ -81,47 +78,74 @@ O compute shader escreve os pixels **diretamente em uma imagem `VK_IMAGE_USAGE_S
 ## 📁 Estrutura do Projeto
 
 ```
-blackhole_vulkan/
-├── include/
-│   ├── test_app.hpp # Classe orquestradora VulkanTestApp
-│   ├── utils.hpp # Utilitários estáticos: readFile(), debugCallback()
+Black_Hole/
+├── include/                          # Headers C++ do projeto
+│   ├── test_app.hpp                  # Classe orquestradora VulkanTestApp
+│   ├── utils.hpp                     # Utilitários estáticos: readFile(), debugCallback()
 │   ├── vk_init/
-│   │ ├── setup.hpp # VulkanTestAppBase + Setup + DeviceCapabilities
-│   │ ├── presentation.hpp # Apresentação (swapchain, visualizações de imagem)
-│   │ ├── compute_pipeline.hpp # ComputePipeline (shader de computação, layout de descritores)
-│   │ └── graphics_pipeline.hpp # GraphicsPipeline (pipeline gráfico, módulos de shader)
+│   │   ├── setup.hpp                 # Setup + DeviceCapabilities + debug callback
+│   │   ├── presentation.hpp          # Swapchain e image views
+│   │   ├── compute_pipeline.hpp      # Pipeline de compute (kernel de ray tracing)
+│   │   └── graphics_pipeline.hpp     # Pipeline gráfica (quad em tela cheia)
 │   ├── vk_main/
-│   │ └── render.hpp # Renderização (buffers de comando, sincronização, buffers, descritores, desenho)
+│   │   └── render.hpp                # Render loop, descritores, sincronização e exportação
 │   └── vk_utils/
-│   └── vkimage.hpp # Auxiliar do VulkanImage (imagem, visualização, amostrador, upload)
+│       └── vkimage.hpp               # Helpers de imagem Vulkan (criação, view, sampler, upload)
 │
-├── src/
-│   ├── test_app.cpp # (Mínimo — orquestrador somente cabeçalho)
+├── src/                              # Implementações C++
+│   ├── test_app.cpp                  # VulkanTestApp (orquestrador)
+│   ├── host.cpp                      # Bridge host para kernels CUDA (modo PNG)
+│   ├── lodepng.cpp                   # Implementação da biblioteca lodepng
+│   ├── perlin.cpp                    # Geração do ruído de Perlin
+│   ├── starmap.cpp                   # Carregamento e amostragem do starmap
+│   ├── temp_and_time.cpp             # Helpers de tempo e temperatura
+│   ├── stb_image_write_impl.cpp      # Implementação STB image write
 │   ├── vk_init/
-│   │ ├── setup.cpp # Implementação do Setup
-│   │ ├── apresentação.cpp # Implementação da Apresentação
-│   │ ├── computa_pipeline.cpp # Implementação do ComputePipeline
-│   │ └── graphics_pipeline.cpp # Implementação do GraphicsPipeline
+│   │   ├── setup.cpp
+│   │   ├── presentation.cpp
+│   │   ├── compute_pipeline.cpp
+│   │   └── graphics_pipeline.cpp
 │   └── vk_main/
-│   └── render.cpp # Implementação do Render (buffers, descritores, sincronização, desenho)
+│       └── render.cpp
 │
-├── shaders/
-│   ├── graphics.slang # Shaders de Vertex e Fragment (para amostragem da textura resultante do compute em um quad em tela cheia)
-│   ├── compute.slang # Shader de computação (kernel)
-│   ├── constants.slang # Constantes físicas
-│   ├── geodesic.slang # Integração geodésica
-│   └── effect.slang # Efeitos visuais (Doppler, redshift)
+├── shaders/                          # Shaders Slang -> SPIR-V
+│   ├── graphics.slang                # Vertex + Fragment (quad em tela cheia)
+│   ├── compute.slang                 # Kernel de computação (ray tracing)
+│   ├── constants.slang               # Constantes físicas
+│   ├── geodesic.slang                # Integração geodésica
+│   └── effects.slang                 # Efeitos visuais (Doppler, redshift)
 │
-├── dados/
-│   ├── starmap.png # Mapa estelar equirretangular
-│   └── perlin.txt # Dados de ruído 3D Perlin
+├── cuda/                             # Kernels CUDA legados (modo PNG estático)
+│   ├── raytrace.cu
+│   ├── geod.cu
+│   ├── effects.cu
+│   ├── png_kernel.cu
+│   └── internals/
+│       └── *.cuh
 │
-├── main.cpp # Ponto de entrada — wrapper de tratamento de abordagens
-├── CMakeLists.txt # Configuração de build com compilação Slang
-├── CMakePresets.json # Presets para Linux, macOS e Windows
-├── .clangd # Configuração do clangd para suporte em IDE
-├── .gitignore # Ignora artefatos de build, arquivos de IDE, .spv
-└── LICENCE
+├── headers/                          # Headers C++/CUDA compartilhados
+│   ├── constants.hpp
+│   ├── engine.hpp
+│   ├── geodesic.cuh
+│   ├── starmap.hpp
+│   ├── perlin.hpp
+│   └── ...
+│
+├── data/                             # Assets necessários em runtime
+│   ├── starmap.png                   # Mapa estelar equirretangular
+│   ├── starmap_2020_4k.exr           # Starmap alternativo em EXR
+│   └── perlin.txt                    # Dados de ruído 3D pré-computados
+│
+├── icons/                            # Ícones da aplicação
+├── output/                           # Imagens exportadas pelo simulador
+├── video.cpp                         # Ponto de entrada do modo Vulkan (interativo / --export)
+├── png.cpp                           # Ponto de entrada do modo CUDA estático
+├── CMakeLists.txt                    # Build: modo video (Vulkan) ou png (CUDA)
+├── CMakePresets.json                 # Presets de build por plataforma
+├── requirements.sh                   # Script de instalação de dependências no Linux
+├── .clangd                           # Configuração do clangd
+├── .gitignore
+└── LICENSE
 ```
 
 ---
@@ -141,7 +165,16 @@ blackhole_vulkan/
 ### Por plataforma
 
 <details>
-<summary><b>Linux (Ubuntu/Debian)</b></summary>
+<summary><b>Linux (Ubuntu/Debian/Fedora/Arch)</b></summary>
+
+Você pode usar o script de instalação automática:
+
+```bash
+chmod +x requirements.sh
+./requirements.sh
+```
+
+Ou instalar manualmente:
 
 ```bash
 sudo apt install cmake ninja-build libglfw3-dev libglm-dev
@@ -192,6 +225,8 @@ Compilador: MSVC (recomendado) ou Clang-CL.
 
 ### Usando CMakePresets (recomendado)
 
+Os presets usam o modo padrão `BUILD_MODE=video` (Vulkan). Para o modo CUDA estático, use a configuração manual abaixo.
+
 ```bash
 # Linux
 cmake --preset linux-release
@@ -211,12 +246,19 @@ cmake --build --preset windows-release
 ### Manual
 
 ```bash
-git clone -b devulkan https://github.com/LuisEd83/Black_Hole.git
+git clone https://github.com/LuisEd83/Black_Hole.git
+cd Black_Hole
 
-cmake -B build -S .
-cmake --build build --config Release
+# Modo Vulkan (renderização em tempo real / exportação estática)
+cmake -B build -S . -G Ninja -DBUILD_MODE=video
+cmake --build build
+
+# Modo CUDA estático (legado, gera PNG via OpenGL/CUDA)
+cmake -B build -S . -G Ninja -DBUILD_MODE=png
+cmake --build build
 ```
 
+> O executável gerado fica em `./build/black_hole_sim`.
 > Os shaders são compilados automaticamente pelo CMake: `slangc` traduz `shaders/graphics.slang` para `shaders/graphics.spv` e `shaders/compute.slang` para `shaders/compute.spv`.
 
 ---
@@ -228,14 +270,11 @@ cmake --build build --config Release
 Execute o binário sem argumentos. Uma janela GLFW abrirá exibindo a simulação em tempo real:
 
 ```bash
-# Linux (via CMakePresets)
-./build/linux-release/black_hole_sim
+# Linux / macOS
+./build/black_hole_sim
 
-# macOS (via CMakePresets)
-./build/macos-release/black_hole_sim
-
-# Windows (via CMakePresets)
-build\windows-release\Release\black_hole_sim.exe
+# Windows
+build\black_hole_sim.exe
 ```
 
 **Controles do teclado:**
@@ -258,16 +297,22 @@ Execute com a flag `--export` para renderizar um único frame e salvá-lo como P
 
 ```bash
 # Exporta com padrão: output.png em 1920×1080
-./build/linux-release/black_hole_sim --export
+./build/black_hole_sim --export
 
 # Exporta com nome customizado
-./build/linux-release/black_hole_sim --export minha_imagem.png
+./build/black_hole_sim --export minha_imagem.png
 
 # Exporta com nome e resolução customizados
-./build/linux-release/black_hole_sim --export minha_imagem.png 2560 1440
+./build/black_hole_sim --export minha_imagem.png 2560 1440
 ```
 
 > ⚠️ Para definir uma resolução customizada, você deve também fornecer o nome do arquivo. A resolução padrão é **1920×1080**.
+
+Exemplo verificado:
+
+```bash
+./build/black_hole_sim --export test_output.png 800 600
+```
 
 ### Arquivos de dados necessários
 

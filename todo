@@ -1,0 +1,30 @@
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+→ repo:
+    
+    
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+→ effects:
+
+    ◦ KER: momento angular
+    ◦ puxão à câmera, regular  velocidade da nave.
+    ◦ posição inicial mais próxima ao buraco negro
+    ◦ checkerboard, TAA, 
+    ◦ Bloom/glow —  pós-processamento no host: pixels muito brilhantes do disco sangram luz para os vizinhos. Feito com convolução gaussiana no 
+                        buffer de pixels antes de salvar o PNG.
+        
+    
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+→ post:
+    
+    ◦ comparações à resultados + científicos
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+→ UI/UX:
+    
+    ◦ knob de realismo
+    ◦ criar de fato um menu de usuário, com passagem de parâmetros (quem sabe json?)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
